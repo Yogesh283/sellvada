@@ -1,0 +1,376 @@
+import React, { useState } from "react";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, usePage } from "@inertiajs/react";
+
+/* -------------------- UI helpers -------------------- */
+const G = {
+  sunrise: "bg-gradient-to-r from-yellow-400 via-blue-600 to-blue-800",
+  ocean: "bg-gradient-to-r from-teal-500 via-emerald-600 to-cyan-600",
+  fire: "bg-gradient-to-r from-red-500 via-rose-500 to-orange-500",
+  royal: "bg-gradient-to-r from-blue-800 via-blue-600 to-indigo-700",
+  steel: "bg-gradient-to-r from-sky-500 via-blue-600 to-red-500",
+  lemonOcean: "bg-gradient-to-r from-yellow-400 via-blue-600 to-cyan-600",
+  pinkBar: "bg-gradient-to-r from-rose-500 via-pink-500 to-rose-400",
+};
+
+const formatUSDT = (n) => {
+  const num = Number(n);
+  if (Number.isNaN(num)) return n ?? "-";
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num)} USDT`;
+};
+
+const formatDT = (s) => {
+  if (!s) return "-";
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
+};
+
+function StatCard({ title, value = "0.00", gradient = G.sunrise, icon = "💳", actionText = "View Detail", actionHref = "#" }) {
+  return (
+    <div className={`${gradient} relative overflow-hidden rounded-lg shadow-md`}>
+      <div className="px-5 py-4 text-white">
+        <div className="flex items-center justify-between">
+          <div className="text-sm/5 font-semibold opacity-90">{title}</div>
+          <div className="text-xl opacity-90">{icon}</div>
+        </div>
+        <div className="mt-3 text-right text-2xl font-extrabold tabular-nums drop-shadow-[0_1px_0_rgba(0,0,0,0.25)]">
+          {value}
+        </div>
+        <div className="mt-3">
+          <a href={actionHref} className="inline-flex items-center rounded-md bg-white/15 px-3 py-1.5 text-xs font-medium hover:bg-white/25 transition">
+            {actionText}
+          </a>
+        </div>
+      </div>
+      <div className="pointer-events-none absolute -right-12 -top-10 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
+    </div>
+  );
+}
+
+function CopyField({ label, value }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value || "");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-28 text-sm font-medium text-slate-700">{label}</div>
+      <input className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800" value={value || ""} readOnly />
+      <button onClick={copy} className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" type="button">
+        {copied ? "Copied!" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
+/* -------------------- Page -------------------- */
+export default function Dashboard() {
+  const {
+    user = {},
+    user_all: userAll = {},
+    sponsor = null,
+    children = {},
+    stats = {},
+    recent_sells = [],
+    team_sells = [],
+    team_left_sells = [],
+    team_right_sells = [],
+    left_user = null,
+    right_user = null,
+    ref_link = "#",
+    wallets = {},
+  } = usePage().props;
+
+  const userName = user?.name ?? "-";
+  const userId = user?.id ?? "-";
+  const referralId = user?.referral_id ?? "-";
+  const position = user?.position ?? "-";
+  const createdAt = formatDT(user?.created_at);
+
+  const payoutWallet = formatUSDT(wallets?.payout_total ?? 0);
+  const unlockedWallet = formatUSDT(wallets?.unlocked_total ?? 0);
+  const allWallet = formatUSDT(wallets?.all_total ?? 0);
+  const moneyOut = formatUSDT(wallets?.withdraw_total ?? 0);
+
+  const directReferrals = Number(stats?.direct_referrals ?? 0);
+  const leftTeamCount = Number(stats?.left_team ?? (children?.left ? 1 : 0));
+  const rightTeamCount = Number(stats?.right_team ?? (children?.right ? 1 : 0));
+  const directPV = Number(stats?.direct_pv ?? 0);
+
+  return (
+    <AuthenticatedLayout header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Dashboard</h2>}>
+      <Head title="Dashboard" />
+
+      <div className="mx-auto max-w-[1400px] px-3 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Welcome + referral box */}
+        <div className="rounded-md bg-white shadow-sm ring-1 ring-slate-100">
+          <div className="grid gap-4 p-4 md:grid-cols-2">
+            <div className="text-sm text-slate-700">
+              <div className="text-slate-900 font-semibold">Welcome {userName}</div>
+              <div>User ID: <span className="font-mono text-slate-900">{userId}</span></div>
+              <div className="mt-1">Referral ID: <span className="font-mono text-slate-900">{referralId}</span></div>
+              <div className="mt-1">Signup Link: <a href={ref_link} className="text-sky-700 underline break-all">{ref_link}</a></div>
+              <div className="mt-1">Position: <span className="font-medium">{position}</span></div>
+              <div className="mt-1">Joined: <span className="font-medium">{createdAt}</span></div>
+
+              <div className="mt-3 text-slate-500 text-xs">Quick Copy</div>
+              <div className="mt-2 space-y-2">
+                <CopyField label="Signup Link" value={ref_link} />
+                <CopyField label="Referral ID" value={referralId} />
+              </div>
+
+              {/* Immediate Left/Right users */}
+              <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-3">
+                <div className="font-semibold text-slate-800 mb-2">Your Immediate Team</div>
+                <div className="text-sm">
+                  Left User: {left_user ? `${left_user.name} (#${left_user.id})` : "-"}<br />
+                  Right User: {right_user ? `${right_user.name} (#${right_user.id})` : "-"}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-end justify-end gap-2">
+              <a href="/profile" className="rounded bg-sky-600 px-3 py-2 text-white text-sm font-semibold hover:bg-sky-700">View Profile</a>
+              <a href="/team" className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700">My Team</a>
+            </div>
+          </div>
+        </div>
+
+        {/* Top metric cards */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard title="TOTAL PAYOUT WALLET" value={payoutWallet} gradient={G.lemonOcean} icon="💰" actionHref="/wallet/payout" />
+          <StatCard title="TOTAL UNLOCKED WALLET" value={unlockedWallet} gradient={G.royal} icon="🔓" actionHref="/wallet/unlocked" />
+          <StatCard title="TOTAL ALL WALLET" value={allWallet} gradient={G.fire} icon="💼" actionHref="/wallet" />
+          <StatCard title="MONEY OUT" value={moneyOut} gradient={G.ocean} icon="💸" actionHref="/withdrawals" />
+        </div>
+
+        {/* Profile & My Team row */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard title="MY PROFILE" value=" " gradient={G.royal} icon="👤" actionHref="/profile" />
+          <StatCard title="MY INCOME" value=" " gradient={G.steel} icon="₹" actionHref="/income" />
+          <StatCard title="MY TEAM" value=" " gradient={G.fire} icon="👥" actionHref="/team" />
+          <StatCard title="MY PIN" value=" " gradient={G.ocean} icon="📍" actionHref="/pins" />
+        </div>
+
+        {/* Accounts/Team counters */}
+        <div className="rounded-lg shadow-sm ring-1 ring-slate-100 overflow-hidden">
+          <div className={`${G.royal} px-4 py-3 text-white text-center font-semibold`}>
+            <span className="opacity-90">“ Team Counters ”</span>
+          </div>
+          <div className="grid gap-4 p-4 md:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Account details</div>
+              <div className="p-4">
+                <dl className="grid grid-cols-2 gap-3 text-sm">
+                  <dt className="text-slate-500">Package Name</dt>
+                  <dd className="text-slate-900 font-medium">{user?.package_name ?? "-"}</dd>
+                  <dt className="text-slate-500">Register Date & Time</dt>
+                  <dd className="text-slate-900 font-medium">{createdAt}</dd>
+                  <dt className="text-slate-500">Sponsor</dt>
+                  <dd className="text-slate-900 font-medium">{sponsor ? `${sponsor?.name ?? "-"} (#${sponsor?.id ?? "-"})` : "-"}</dd>
+                  <dt className="text-slate-500">Last Login</dt>
+                  <dd className="text-slate-900 font-medium">{formatDT(user?.last_login_at)}</dd>
+                </dl>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Team Count</div>
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
+                  <span className="text-slate-600">Direct Referral Count</span>
+                  <span className="font-bold">{directReferrals}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
+                  <span className="text-slate-600">Direct PV Count</span>
+                  <span className="font-bold">{directPV}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
+                  <span className="text-slate-600">Left Team</span>
+                  <span className="font-bold">{leftTeamCount}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
+                  <span className="text-slate-600">Right Team</span>
+                  <span className="font-bold">{rightTeamCount}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Purchases (Your own) */}
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Recent Purchases</div>
+          <div className="p-4">
+            {!(recent_sells && recent_sells.length) ? (
+              <div className="text-slate-600 text-sm">No orders yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500 border-b">
+                      <th className="py-2 pr-4">#ID</th>
+                      <th className="py-2 pr-4">Product</th>
+                      <th className="py-2 pr-4">Type</th>
+                      <th className="py-2 pr-4">Amount</th>
+                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent_sells.map((r) => (
+                      <tr key={r.id} className="border-b last:border-0">
+                        <td className="py-2 pr-4 font-medium">{r.id}</td>
+                        <td className="py-2 pr-4">{r.product}</td>
+                        <td className="py-2 pr-4 uppercase">{r.type}</td>
+                        <td className="py-2 pr-4">{formatUSDT(r.amount)}</td>
+                        <td className="py-2 pr-4">{r.status}</td>
+                        <td className="py-2">{formatDT(r.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Team Purchases (any leg) */}
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Team Purchases (Your Left/Right)</div>
+          <div className="p-4">
+            {!(team_sells && team_sells.length) ? (
+              <div className="text-slate-600 text-sm">No team purchases yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500 border-b">
+                      <th className="py-2 pr-4">#ID</th>
+                      <th className="py-2 pr-4">Buyer</th>
+                      <th className="py-2 pr-4">Leg</th>
+                      <th className="py-2 pr-4">Product</th>
+                      <th className="py-2 pr-4">Type</th>
+                      <th className="py-2 pr-4">Amount</th>
+                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {team_sells.map((r) => (
+                      <tr key={r.id} className="border-b last:border-0">
+                        <td className="py-2 pr-4 font-medium">{r.id}</td>
+                        <td className="py-2 pr-4">{r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span></td>
+                        <td className="py-2 pr-4 font-semibold">{r.leg === "R" ? "Right" : r.leg === "L" ? "Left" : r.leg || "-"}</td>
+                        <td className="py-2 pr-4">{r.product}</td>
+                        <td className="py-2 pr-4 uppercase">{r.type}</td>
+                        <td className="py-2 pr-4">{formatUSDT(r.amount)}</td>
+                        <td className="py-2 pr-4">{r.status}</td>
+                        <td className="py-2">{formatDT(r.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Split tables: Left / Right */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Left Leg */}
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
+              Left Leg Purchases {left_user ? `— ${left_user.name} (#${left_user.id})` : ""}
+            </div>
+            <div className="p-4">
+              {!(team_left_sells && team_left_sells.length) ? (
+                <div className="text-slate-600 text-sm">No left-leg purchases.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-500 border-b">
+                        <th className="py-2 pr-4">#ID</th>
+                        <th className="py-2 pr-4">Buyer</th>
+                        <th className="py-2 pr-4">Product</th>
+                        <th className="py-2 pr-4">Amount</th>
+                        <th className="py-2 pr-4">Status</th>
+                        <th className="py-2">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {team_left_sells.map((r) => (
+                        <tr key={r.id} className="border-b last:border-0">
+                          <td className="py-2 pr-4 font-medium">{r.id}</td>
+                          <td className="py-2 pr-4">{r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span></td>
+                          <td className="py-2 pr-4">{r.product}</td>
+                          <td className="py-2 pr-4">{formatUSDT(r.amount)}</td>
+                          <td className="py-2 pr-4">{r.status}</td>
+                          <td className="py-2">{formatDT(r.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Leg */}
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
+              Right Leg Purchases {right_user ? `— ${right_user.name} (#${right_user.id})` : ""}
+            </div>
+            <div className="p-4">
+              {!(team_right_sells && team_right_sells.length) ? (
+                <div className="text-slate-600 text-sm">No right-leg purchases.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-500 border-b">
+                        <th className="py-2 pr-4">#ID</th>
+                        <th className="py-2 pr-4">Buyer</th>
+                        <th className="py-2 pr-4">Product</th>
+                        <th className="py-2 pr-4">Amount</th>
+                        <th className="py-2 pr-4">Status</th>
+                        <th className="py-2">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {team_right_sells.map((r) => (
+                        <tr key={r.id} className="border-b last:border-0">
+                          <td className="py-2 pr-4 font-medium">{r.id}</td>
+                          <td className="py-2 pr-4">{r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span></td>
+                          <td className="py-2 pr-4">{r.product}</td>
+                          <td className="py-2 pr-4">{formatUSDT(r.amount)}</td>
+                          <td className="py-2 pr-4">{r.status}</td>
+                          <td className="py-2">{formatDT(r.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom banner */}
+        <div className={`${G.pinkBar} rounded-lg py-8 text-center text-white shadow-md`}>
+          <div className="text-2xl font-bold">“ News ”</div>
+        </div>
+      </div>
+    </AuthenticatedLayout>
+  );
+}

@@ -1,0 +1,7 @@
+---
+deployment:
+  tasks:
+    - export COMPOSER=/opt/cpanel/composer/bin/composer
+    - $COMPOSER install --no-dev --optimize-autoloader
+    - php artisan migrate --force
+    - php artisan optimize
