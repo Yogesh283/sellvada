@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Support\Str;
@@ -26,46 +27,64 @@ class RegisteredUserController extends Controller
     /** Handle registration with binary placement */
     public function store(Request $request): RedirectResponse
     {
+        // Allow ?refer_by=CODE to auto-fill if the form field is empty
+        $request->merge([
+            'refer_by' => trim($request->input('refer_by') ?? $request->query('refer_by') ?? ''),
+        ]);
+
+        // Validate basic fields (do NOT use exists yet so we can customize message/case)
         $data = $request->validate([
             'name'      => 'required|string|max:255',
             'email'     => 'required|string|lowercase|email|max:255|unique:users,email',
-            'password'  => ['required','confirmed', Rules\Password::defaults()],
-            'refer_by'  => 'nullable|string',     // sponsor ka referral_id; na mile to query param ya logged-in se bhi le sakte
-            'side'      => 'required|in:L,R',     // 'L' ya 'R' jaha place karna hai
-            'spillover' => 'sometimes|boolean',   // agar preferred side bhara hai to branch me first free
+            'password'  => ['required', 'confirmed', Rules\Password::defaults()],
+            'refer_by'  => 'required|string',
+            'side'      => 'required|in:L,R',
+            'spillover' => 'sometimes|boolean',
+        ], [
+            'refer_by.required' => 'Referral ID (Sponsor code) is required.',
         ]);
 
+        // Normalize referral code for case-insensitive match
+        $referBy = strtoupper($data['refer_by']);
 
-        $referBy = $data['refer_by'] ?? $request->query('refer_by'); // e.g. /register?refer_by=ABCD1234
-        abort_if(!$referBy, 422, 'Missing refer_by (referral id).');
-
-        $sponsor = User::where('referral_id', $referBy)->first();
-        abort_if(!$sponsor, 422, 'Invalid sponsor referral id.');
-
+        // Find sponsor by referral_id (case-insensitive)
+        $sponsor = User::whereRaw('UPPER(referral_id) = ?', [$referBy])->first();
+        if (!$sponsor) {
+            throw ValidationException::withMessages([
+                'refer_by' => 'This Referral ID (Sponsor code) is not available.',
+            ]);
+        }
 
         $preferSide = $data['side'];
         $useSpill   = (bool)($data['spillover'] ?? true);
 
-        [$parentId, $side] = $this->resolvePlacement($sponsor->id, $preferSide, $useSpill);
+        // Resolve final placement; if not found, return a field error (no abort/exception page)
+        $placement = $this->resolvePlacement($sponsor->id, $preferSide, $useSpill);
+        if (!$placement) {
+            throw ValidationException::withMessages([
+                'side' => 'No free slot on selected side for this sponsor.',
+            ]);
+        }
 
+        [$parentId, $finalSide] = $placement;
 
         $newReferralId = $this->generateReferralCode();
 
-        $user = DB::transaction(function () use ($data, $parentId, $side, $newReferralId, $referBy) {
+        $user = DB::transaction(function () use ($data, $parentId, $finalSide, $newReferralId, $referBy) {
             /** @var \App\Models\User $user */
             $user = User::create([
-                'name'        => $data['name'],
-                'email'       => $data['email'],
-                'password'    => Hash::make($data['password']),
-                'referral_id' => $newReferralId,
-                'refer_by'    => $referBy,     // kis referral_id se aaya
-                'parent_id'   => $parentId,    // jiske niche place hua
-                'position'    => $side,        // L/R
-                'Password_plain' =>$data['password'],
+                'name'           => $data['name'],
+                'email'          => $data['email'],
+                'password'       => Hash::make($data['password']),
+                'referral_id'    => $newReferralId, // new code for this user
+                'refer_by'       => $referBy,       // sponsor’s referral_id
+                'parent_id'      => $parentId,      // tree parent
+                'position'       => $finalSide,     // L/R
+                'Password_plain' => $data['password'], // NOTE: storing plain text is unsafe
             ]);
 
-            // Parent pointers set (left_user_id / right_user_id)
-            if ($side === 'L') {
+            // Set parent pointers (left_user_id / right_user_id) only if empty
+            if ($finalSide === 'L') {
                 User::where('id', $parentId)->whereNull('left_user_id')->update(['left_user_id' => $user->id]);
             } else {
                 User::where('id', $parentId)->whereNull('right_user_id')->update(['right_user_id' => $user->id]);
@@ -86,25 +105,29 @@ class RegisteredUserController extends Controller
     private function generateReferralCode(): string
     {
         do {
-            $code = strtoupper(Str::random(8)); // e.g. 8-char alnum
+            $code = strtoupper(Str::random(8)); // e.g., 8-char alnum
         } while (User::where('referral_id', $code)->exists());
         return $code;
     }
 
-    /** Direct slot free? (fast via parent pointers) */
+    /** Check if direct slot is free (no exception throwing) */
     private function directSlotFree(int $parentId, string $side): bool
     {
-        $p = User::select('left_user_id','right_user_id')->findOrFail($parentId);
-        return $side === 'L' ? ($p->left_user_id === null) : ($p->right_user_id === null);
-    }
+        $p = User::select('left_user_id', 'right_user_id')->find($parentId);
+        if (!$p) return false;
+
+        return $side === 'L'
+            ? ($p->left_user_id === null)
+            : ($p->right_user_id === null);
+        }
 
     /**
      * Decide final placement:
      * 1) Try sponsor on preferred side
-     * 2) If occupied & spillover=true → BFS traverse same branch to find first free slot
-     * 3) Else 422
+     * 2) If occupied & spillover=true → BFS over the same branch to find first free slot
+     * 3) If nothing found → return null (caller will raise a field error)
      */
-    private function resolvePlacement(int $sponsorId, string $preferredSide, bool $spill): array
+    private function resolvePlacement(int $sponsorId, string $preferredSide, bool $spill): ?array
     {
         $side = ($preferredSide === 'R') ? 'R' : 'L';
 
@@ -117,7 +140,7 @@ class RegisteredUserController extends Controller
             if ($slot) return [$slot['parent_id'], $slot['side']];
         }
 
-        abort(422, 'No free slot on selected side for this sponsor.');
+        return null;
     }
 
     /** BFS spillover: level-order traversal to find first free L/R under the branch */
@@ -128,7 +151,7 @@ class RegisteredUserController extends Controller
 
         while ($queue) {
             $p = array_shift($queue);
-            $parent = User::select('id','left_user_id','right_user_id')->find($p);
+            $parent = User::select('id', 'left_user_id', 'right_user_id')->find($p);
             if (!$parent) continue;
 
             // Try preferred side first, then the other
@@ -140,9 +163,9 @@ class RegisteredUserController extends Controller
                 if ($parent->left_user_id === null)  return ['parent_id' => $p, 'side' => 'L'];
             }
 
-            // Level-order: push children to queue
-            if ($parent->left_user_id)  $queue[] = (int)$parent->left_user_id;
-            if ($parent->right_user_id) $queue[] = (int)$parent->right_user_id;
+            // Level-order: push children
+            if ($parent->left_user_id)  $queue[] = (int) $parent->left_user_id;
+            if ($parent->right_user_id) $queue[] = (int) $parent->right_user_id;
         }
 
         return null;
