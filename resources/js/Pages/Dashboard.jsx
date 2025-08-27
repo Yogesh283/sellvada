@@ -1,3 +1,4 @@
+// resources/js/Pages/Dashboard.jsx
 import React, { useState } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, usePage } from "@inertiajs/react";
@@ -13,13 +14,15 @@ const G = {
   pinkBar: "bg-gradient-to-r from-rose-500 via-pink-500 to-rose-400",
 };
 
-const formatUSDT = (n) => {
+const formatINR = (n) => {
   const num = Number(n);
   if (Number.isNaN(num)) return n ?? "-";
-  return `${new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(num)} USDT`;
+  }).format(num);
 };
 
 const formatDT = (s) => {
@@ -28,7 +31,7 @@ const formatDT = (s) => {
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
 };
 
-function StatCard({ title, value = "0.00", gradient = G.sunrise, icon = "💳", actionText = "View Detail", actionHref = "#" }) {
+function StatCard({ title, value = "₹0.00", gradient = G.sunrise, icon = "💳", actionText = "View Detail", actionHref = "#" }) {
   return (
     <div className={`${gradient} relative overflow-hidden rounded-lg shadow-md`}>
       <div className="px-5 py-4 text-white">
@@ -74,6 +77,18 @@ function CopyField({ label, value }) {
 
 /* -------------------- Page -------------------- */
 export default function Dashboard() {
+  const { wallet_amount } = usePage().props;
+  const availableBalance = formatINR(wallet_amount ?? 0);
+
+  const { payout_wallet } = usePage().props;
+  const payoutBalance = formatINR(payout_wallet ?? 0);
+
+  const { today_profit } = usePage().props;
+  const Today = formatINR(today_profit ?? 0);
+
+  const { total_team } = usePage().props;
+  const TotalTeam = total_team ?? 0;
+
   const {
     user = {},
     user_all: userAll = {},
@@ -93,13 +108,10 @@ export default function Dashboard() {
   const userName = user?.name ?? "-";
   const userId = user?.id ?? "-";
   const referralId = user?.referral_id ?? "-";
-  const position = user?.position ?? "-";
   const createdAt = formatDT(user?.created_at);
 
-  const payoutWallet = formatUSDT(wallets?.payout_total ?? 0);
-  const unlockedWallet = formatUSDT(wallets?.unlocked_total ?? 0);
-  const allWallet = formatUSDT(wallets?.all_total ?? 0);
-  const moneyOut = formatUSDT(wallets?.withdraw_total ?? 0);
+  // Optional extra wallet metrics (also INR)
+  const moneyOut = formatINR(wallets?.withdraw_total ?? 0);
 
   const directReferrals = Number(stats?.direct_referrals ?? 0);
   const leftTeamCount = Number(stats?.left_team ?? (children?.left ? 1 : 0));
@@ -118,23 +130,12 @@ export default function Dashboard() {
               <div className="text-slate-900 font-semibold">Welcome {userName}</div>
               <div>User ID: <span className="font-mono text-slate-900">{userId}</span></div>
               <div className="mt-1">Referral ID: <span className="font-mono text-slate-900">{referralId}</span></div>
-              <div className="mt-1">Signup Link: <a href={ref_link} className="text-sky-700 underline break-all">{ref_link}</a></div>
-              <div className="mt-1">Position: <span className="font-medium">{position}</span></div>
               <div className="mt-1">Joined: <span className="font-medium">{createdAt}</span></div>
 
               <div className="mt-3 text-slate-500 text-xs">Quick Copy</div>
               <div className="mt-2 space-y-2">
                 <CopyField label="Signup Link" value={ref_link} />
                 <CopyField label="Referral ID" value={referralId} />
-              </div>
-
-              {/* Immediate Left/Right users */}
-              <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-3">
-                <div className="font-semibold text-slate-800 mb-2">Your Immediate Team</div>
-                <div className="text-sm">
-                  Left User: {left_user ? `${left_user.name} (#${left_user.id})` : "-"}<br />
-                  Right User: {right_user ? `${right_user.name} (#${right_user.id})` : "-"}
-                </div>
               </div>
             </div>
 
@@ -147,17 +148,17 @@ export default function Dashboard() {
 
         {/* Top metric cards */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="TOTAL PAYOUT WALLET" value={payoutWallet} gradient={G.lemonOcean} icon="💰" actionHref="/wallet/payout" />
-          <StatCard title="TOTAL UNLOCKED WALLET" value={unlockedWallet} gradient={G.royal} icon="🔓" actionHref="/wallet/unlocked" />
-          <StatCard title="TOTAL ALL WALLET" value={allWallet} gradient={G.fire} icon="💼" actionHref="/wallet" />
-          <StatCard title="MONEY OUT" value={moneyOut} gradient={G.ocean} icon="💸" actionHref="/withdrawals" />
+          <StatCard title="Wallet Balance" value={availableBalance} gradient={G.lemonOcean} icon="💰" actionHref="/wallet/payout" />
+          <StatCard title="Total Payout Wallet" value={payoutBalance} gradient={G.royal} icon="🔓" actionHref="/wallet/unlocked" />
+          <StatCard title="Today Profit" value={Today} gradient={G.fire} icon="💼" actionHref="/wallet" />
+          <StatCard title="Money Out" value={moneyOut} gradient={G.ocean} icon="💸" actionHref="/withdrawals" />
         </div>
 
         {/* Profile & My Team row */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard title="MY PROFILE" value=" " gradient={G.royal} icon="👤" actionHref="/profile" />
           <StatCard title="MY INCOME" value=" " gradient={G.steel} icon="₹" actionHref="/income" />
-          <StatCard title="MY TEAM" value=" " gradient={G.fire} icon="👥" actionHref="/team" />
+          <StatCard title="MY TEAM" value={TotalTeam} gradient={G.fire} icon="👥" actionHref="/team" />
           <StatCard title="MY PIN" value=" " gradient={G.ocean} icon="📍" actionHref="/pins" />
         </div>
 
@@ -232,7 +233,7 @@ export default function Dashboard() {
                         <td className="py-2 pr-4 font-medium">{r.id}</td>
                         <td className="py-2 pr-4">{r.product}</td>
                         <td className="py-2 pr-4 uppercase">{r.type}</td>
-                        <td className="py-2 pr-4">{formatUSDT(r.amount)}</td>
+                        <td className="py-2 pr-4">{formatINR(r.amount)}</td>
                         <td className="py-2 pr-4">{r.status}</td>
                         <td className="py-2">{formatDT(r.created_at)}</td>
                       </tr>
@@ -273,7 +274,7 @@ export default function Dashboard() {
                         <td className="py-2 pr-4 font-semibold">{r.leg === "R" ? "Right" : r.leg === "L" ? "Left" : r.leg || "-"}</td>
                         <td className="py-2 pr-4">{r.product}</td>
                         <td className="py-2 pr-4 uppercase">{r.type}</td>
-                        <td className="py-2 pr-4">{formatUSDT(r.amount)}</td>
+                        <td className="py-2 pr-4">{formatINR(r.amount)}</td>
                         <td className="py-2 pr-4">{r.status}</td>
                         <td className="py-2">{formatDT(r.created_at)}</td>
                       </tr>
@@ -314,7 +315,7 @@ export default function Dashboard() {
                           <td className="py-2 pr-4 font-medium">{r.id}</td>
                           <td className="py-2 pr-4">{r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span></td>
                           <td className="py-2 pr-4">{r.product}</td>
-                          <td className="py-2 pr-4">{formatUSDT(r.amount)}</td>
+                          <td className="py-2 pr-4">{formatINR(r.amount)}</td>
                           <td className="py-2 pr-4">{r.status}</td>
                           <td className="py-2">{formatDT(r.created_at)}</td>
                         </tr>
@@ -353,7 +354,7 @@ export default function Dashboard() {
                           <td className="py-2 pr-4 font-medium">{r.id}</td>
                           <td className="py-2 pr-4">{r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span></td>
                           <td className="py-2 pr-4">{r.product}</td>
-                          <td className="py-2 pr-4">{formatUSDT(r.amount)}</td>
+                          <td className="py-2 pr-4">{formatINR(r.amount)}</td>
                           <td className="py-2 pr-4">{r.status}</td>
                           <td className="py-2">{formatDT(r.created_at)}</td>
                         </tr>

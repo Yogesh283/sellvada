@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Arr;
 use Inertia\Inertia;
-
+use Carbon\Carbon;
 class DashboardController extends Controller
 {
     public function index(Request $request)
@@ -22,6 +22,8 @@ class DashboardController extends Controller
         ]);
 
         $directReferrals = DB::table('users')->where('sponsor_id', $user->id)->count();
+        $myReferralId = DB::table('users')->where('id', $user->id)->value('referral_id');
+
 
         $recentSells = DB::table('sell')
             ->where('buyer_id', $user->id)
@@ -93,6 +95,27 @@ class DashboardController extends Controller
             return substr($v, 0, $keep) . str_repeat('*', max(0, $len - 2*$keep)) . substr($v, -$keep);
         };
 
+$WalletAmount=DB::table('wallet')->where('user_id',$user->id)->sum('amount');
+
+$PayoutAmount=DB::table('_payout')->where('user_id',$user->id)->sum('amount');
+$PayoutAmountToday = DB::table('_payout')->where('user_id', $user->id)->whereDate('created_at', Carbon::today())->sum('amount');
+$totalTeam = DB::selectOne("
+WITH RECURSIVE team AS (
+        SELECT id, referral_id, position
+        FROM users
+        WHERE referral_id = ?
+
+        UNION ALL
+
+        SELECT u.id, u.referral_id, u.position
+        FROM users u
+        INNER JOIN team t ON u.referral_id = t.id
+    )
+    SELECT COUNT(*) AS cnt FROM team
+", [$myReferralId])->cnt;
+
+
+
         $userAll = [
             'id'               => $user->id,
             'name'             => $user->name,
@@ -119,6 +142,10 @@ class DashboardController extends Controller
             'user'             => $userSafe,
             'user_all'         => $userAll,
             'sponsor'          => $user->sponsor ? $user->sponsor->only(['id','name','email']) : null,
+            'wallet_amount'    => $WalletAmount,
+            'payout_wallet'    => $PayoutAmount,
+            'today_profit'     => $PayoutAmountToday,
+            'total_team'       => $totalTeam,
             'children'         => [
                 'left'  => $user->leftChild ? $user->leftChild->only(['id','name'])  : null,
                 'right' => $user->rightChild ? $user->rightChild->only(['id','name']) : null,
