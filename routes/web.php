@@ -12,6 +12,10 @@ use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\PayoutController;
 use App\Http\Controllers\IncomeController;
+use App\Http\Controllers\BuyController;
+use App\Http\Controllers\ShopController;
+
+
 
 
 
@@ -68,6 +72,12 @@ Route::middleware(['auth','verified'])->group(function () {
     Route::get('/income', [IncomeController::class, 'index'])->name('income.index');
 });
 
+Route::middleware(['auth','verified'])->group(function () {
+    Route::get('/buy', [ShopController::class, 'create'])->name('buy');
+    Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+});
 
+
+Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 
 require __DIR__.'/auth.php';
