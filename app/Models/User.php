@@ -7,6 +7,8 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Models\Wallet;
 
 class User extends Authenticatable
 {
@@ -23,7 +25,7 @@ class User extends Authenticatable
         'left_user_id',
         'right_user_id',
         'Password_plain',
-        'sponsor_id', // ✅ correct column name
+        'sponsor_id',
     ];
 
     protected $hidden = [
@@ -37,34 +39,50 @@ class User extends Authenticatable
     ];
 
     /**
-     * Jis user ne mujhe sponsor kiya (users.sponsor_id -> users.id)
+     * Auto-create a main wallet row when a user is created.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (User $user) {
+            Wallet::firstOrCreate(
+                ['user_id' => $user->id, 'type' => 'main'],
+                ['amount' => 0]
+            );
+        });
+    }
+
+    /**
+     * Relations
      */
     public function sponsor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sponsor_id');
     }
 
-    /**
-     * Left child mapping (users.left_user_id -> users.id)
-     */
     public function leftChild(): BelongsTo
     {
         return $this->belongsTo(User::class, 'left_user_id');
     }
 
-    /**
-     * Right child mapping (users.right_user_id -> users.id)
-     */
     public function rightChild(): BelongsTo
     {
         return $this->belongsTo(User::class, 'right_user_id');
     }
 
-    /**
-     * Mere direct referrals (dusre users jinke sponsor_id = $this->id)
-     */
     public function directReferrals(): HasMany
     {
         return $this->hasMany(User::class, 'sponsor_id');
+    }
+
+    /** Single main wallet (type = main) */
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(Wallet::class, 'user_id')->where('type', 'main');
+    }
+
+    /** If you ever need multiple wallet types */
+    public function wallets(): HasMany
+    {
+        return $this->hasMany(Wallet::class, 'user_id');
     }
 }
