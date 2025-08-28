@@ -11,6 +11,8 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\PayoutController;
+use App\Http\Controllers\IncomeController;
+
 
 
 
@@ -59,4 +61,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth','verified'])->group(function () {
     Route::get('/payouts', [PayoutController::class, 'index'])->name('payouts.index');
 });
+
+
+
+Route::middleware(['auth','verified'])->group(function () {
+    Route::get('/income', [IncomeController::class, 'index'])->name('income.index');
+});
+
+
+
 require __DIR__.'/auth.php';
