@@ -149,7 +149,8 @@ export default function Dashboard() {
         {/* Top metric cards */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard title="Wallet Balance" value={availableBalance} gradient={G.lemonOcean} icon="💰" actionHref="/wallet/payout" />
-          <StatCard title="Total Payout Wallet" value={payoutBalance} gradient={G.royal} icon="🔓" actionHref="/wallet/unlocked" />
+          {/* 🔗 fixed to lowercase route */}
+          <StatCard title="Total Payout Wallet" value={payoutBalance} gradient={G.royal} icon="🔓" actionHref="/payouts" />
           <StatCard title="Today Profit" value={Today} gradient={G.fire} icon="💼" actionHref="/wallet" />
           <StatCard title="Money Out" value={moneyOut} gradient={G.ocean} icon="💸" actionHref="/withdrawals" />
         </div>

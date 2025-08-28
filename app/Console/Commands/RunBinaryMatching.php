@@ -10,7 +10,7 @@ class RunBinaryMatching extends Command
 {
     protected string $sellTable = 'sell';
 
-    protected $signature = 'binary:match {closing : 1 or 2} {--date=}';
+    protected $signature   = 'binary:match {closing : 1 or 2} {--date=}';
     protected $description = 'Compute binary matching (1 pair per closing) with sponsor qualification';
 
     // plan order for qualification check
@@ -35,7 +35,7 @@ class RunBinaryMatching extends Command
             ? Carbon::parse($this->option('date'))->startOfDay()
             : Carbon::today();
 
-        // Closing windows (IST example from your prior logic)
+        // IST windows
         if ($closing === 1) {
             $start = $day->copy()->setTime(6, 0, 0);
             $end   = $day->copy()->setTime(11, 59, 59);
@@ -45,17 +45,21 @@ class RunBinaryMatching extends Command
         }
 
         foreach ($this->plans as $planName => $cfg) {
-
-            // Sponsors who have PAID sales in this closing window for this plan family
+            // distinct, valid sponsor ids only
             $sponsorIds = DB::table($this->sellTable)
                 ->whereIn('type', $cfg['types'])
                 ->where('status', 'paid')
                 ->whereBetween('created_at', [$start, $end])
-                ->distinct()
-                ->pluck('sponsor_id');
+                ->whereNotNull('sponsor_id')
+                ->pluck('sponsor_id')
+                ->filter(fn ($v) => !is_null($v))
+                ->map(fn ($v) => (int) $v)
+                ->filter(fn ($v) => $v > 0)
+                ->unique()
+                ->values();
 
             foreach ($sponsorIds as $sid) {
-                // Get leg volumes for the window (PAID only)
+                // window volumes for this sponsor
                 $rows = DB::table($this->sellTable)
                     ->select('leg', 'amount')
                     ->where('sponsor_id', $sid)
@@ -64,20 +68,27 @@ class RunBinaryMatching extends Command
                     ->whereBetween('created_at', [$start, $end])
                     ->get();
 
-                $volL = (float) $rows->where('leg', 'L')->sum(fn ($r) => (float) $r->amount);
-                $volR = (float) $rows->where('leg', 'R')->sum(fn ($r) => (float) $r->amount);
+                // case-safe leg sum
+                $volL = 0.0; $volR = 0.0;
+                foreach ($rows as $r) {
+                    $leg = strtoupper((string)($r->leg ?? ''));
+                    $amt = (float)$r->amount;
+                    if ($leg === 'L') { $volL += $amt; }
+                    elseif ($leg === 'R') { $volR += $amt; }
+                }
+
                 $matched = min($volL, $volR);
+                $pairs   = (int) floor($matched / (float) $cfg['pair']);
 
-                // Number of full pairs available in the window
-                $pairs = (int) floor($matched / (float) $cfg['pair']);
-
-                // Qualification via self purchase (plan order respected)
+                // qualification via self purchase (plan order respected)
                 $qualified = $this->sponsorQualifiedBySelfPurchase($sid, $planName, $end);
 
-                // 1 pair per closing if qualified (else 0)
+                // 1 pair per closing if qualified
                 $payoutForClosing = ($pairs >= 1 && $qualified) ? (float) $cfg['pair'] : 0.0;
+                // per-closing cap (here equal to pair amount)
+                $payoutForClosing = min($payoutForClosing, (float)$cfg['closing_cap']);
 
-                // Apply DAILY cap across both closings
+                // daily cap across both closings
                 $alreadyToday = (float) DB::table('binary_payouts')
                     ->where('sponsor_id', $sid)
                     ->where('plan', $planName)
@@ -85,97 +96,112 @@ class RunBinaryMatching extends Command
                     ->sum('payout');
 
                 $remainingToday = max(0.0, (float) $cfg['daily_cap'] - $alreadyToday);
-                $payable = ($remainingToday > 0)
-                    ? min($payoutForClosing, $remainingToday)
-                    : 0.0;
+                $payable = ($remainingToday > 0) ? min($payoutForClosing, $remainingToday) : 0.0;
 
-                if ($payable > 0) {
-                    DB::beginTransaction();
-                    try {
-                        // 1) Upsert into binary_payouts (per user, plan, day, closing)
-                        DB::table('binary_payouts')->updateOrInsert(
-                            [
-                                'sponsor_id'   => $sid,
-                                'plan'         => $planName,
-                                'closing_date' => $day->toDateString(),
-                                'closing_no'   => $closing,
-                            ],
-                            [
-                                'volume_left'  => $volL,
-                                'volume_right' => $volR,
-                                'matched'      => $matched,
-                                'payout'       => $payable,
-                                'updated_at'   => now(),
-                                'created_at'   => now(),
-                            ]
+                if ($payable <= 0) {
+                    // still record volumes for visibility
+                    DB::table('binary_payouts')->updateOrInsert(
+                        [
+                            'sponsor_id'   => $sid,
+                            'plan'         => $planName,
+                            'closing_date' => $day->toDateString(),
+                            'closing_no'   => $closing,
+                        ],
+                        [
+                            'volume_left'  => $volL,
+                            'volume_right' => $volR,
+                            'matched'      => $matched,
+                            'payout'       => 0.0,
+                            'updated_at'   => now(),
+                            'created_at'   => now(),
+                        ]
+                    );
+                    $this->line(sprintf('NO PAY → PLAN=%s SPONSOR=%d CLOSE=%d DATE=%s (volL=%.2f volR=%.2f matched=%.2f)',
+                        strtoupper($planName), $sid, $closing, $day->toDateString(), $volL, $volR, $matched));
+                    continue;
+                }
+
+                // figure out weaker leg buyer (from_user_id) inside this window
+                $minSide = ($volL <= $volR) ? 'L' : 'R';
+                $triggerBuyerId = DB::table($this->sellTable)
+                    ->where('sponsor_id', $sid)
+                    ->whereIn('type', $cfg['types'])
+                    ->where('status', 'paid')
+                    ->whereBetween('created_at', [$start, $end])
+                    ->where('leg', $minSide)
+                    ->orderByDesc('created_at')
+                    ->value('buyer_id'); // may be null if weird, that's fine
+
+                DB::beginTransaction();
+                try {
+                    // 1) detail table (idempotent per slot)
+                    DB::table('binary_payouts')->updateOrInsert(
+                        [
+                            'sponsor_id'   => $sid,
+                            'plan'         => $planName,
+                            'closing_date' => $day->toDateString(),
+                            'closing_no'   => $closing,
+                        ],
+                        [
+                            'volume_left'  => $volL,
+                            'volume_right' => $volR,
+                            'matched'      => $matched,
+                            'payout'       => $payable,
+                            'updated_at'   => now(),
+                            'created_at'   => now(),
+                        ]
+                    );
+
+                    // 2) payout ledger (guard duplicate per user+day+closing)
+                    $method = 'closing_' . $closing;
+                    $exists = DB::table('_payout')
+                        ->where('user_id', $sid)
+                        ->where('type', 'binary_matching')
+                        ->where('method', $method)
+                        ->whereDate('created_at', $day->toDateString())
+                        ->exists();
+
+                    if (!$exists) {
+                        DB::table('_payout')->insert([
+                            'user_id'      => $sid,              // legacy
+                            'to_user_id'   => $sid,              // ✅ receiver
+                            'from_user_id' => $triggerBuyerId,   // ✅ source buyer on weaker leg (can be null)
+                            'amount'       => $payable,
+                            'status'       => 'pending',
+                            'method'       => $method,           // closing_1 / closing_2
+                            'type'         => 'binary_matching',
+                            'created_at'   => now(),
+                            'updated_at'   => now(),
+                        ]);
+
+                        // 3) credit wallet
+                        $inc = number_format($payable, 2, '.', '');
+                        $affected = DB::update(
+                            "UPDATE wallet SET amount = amount + ? WHERE user_id = ?",
+                            [$inc, $sid]
                         );
-
-                        // 2) Insert into _payout (avoid duplicate per user+day+closing)
-                        $method = 'closing_' . $closing; // closing_1 / closing_2
-
-                        $exists = DB::table('_payout')
-                            ->where('user_id', $sid)
-                            ->where('type', 'binary_matching')
-                            ->where('method', $method)
-                            ->whereDate('created_at', $day->toDateString())
-                            ->exists();
-
-                        if (!$exists) {
-                            // 2a) Create payout row
-                            DB::table('_payout')->insert([
+                        if ($affected === 0) {
+                            DB::table('wallet')->insert([
                                 'user_id'    => $sid,
-                                'amount'     => $payable,
-                                'status'     => 'pending',          // adjust as per your payout flow
-                                'method'     => $method,            // closing_1 / closing_2
-                                'type'       => 'binary_matching',  // categorize payout
+                                'amount'     => $inc,
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
-
-                            // 3) CREDIT WALLET (balance table, single row per user)
-                            // If row exists: amount += payable; else create with amount = payable
-                            $affected = DB::update(
-                                "UPDATE wallet SET amount = amount + ? WHERE user_id = ?",
-                                [number_format($payable, 2, '.', ''), $sid]
-                            );
-
-                            if ($affected === 0) {
-                                DB::table('wallet')->insert([
-                                    'user_id'    => $sid,
-                                    'amount'     => number_format($payable, 2, '.', ''),
-                                    'created_at' => now(),
-                                    'updated_at' => now(),
-                                ]);
-                            }
-
-                        } else {
-                            // already paid/recorded for this slot → skip wallet credit
-                            // (agar re-run pe adjust karna ho, yahan delta calculate karke wallet me update kar sakte ho)
                         }
-
-                        DB::commit();
-
-                        $this->info(sprintf(
-                            'PAID → PLAN=%s SPONSOR=%d CLOSE=%d DATE=%s PAYABLE=%.2f (binary_payouts + _payout + wallet+)',
-                            strtoupper($planName),
-                            $sid,
-                            $closing,
-                            $day->toDateString(),
-                            $payable
-                        ));
-                    } catch (\Throwable $e) {
-                        DB::rollBack();
-                        $this->error(sprintf(
-                            'ERR  → PLAN=%s SPONSOR=%d CLOSE=%d DATE=%s :: %s',
-                            strtoupper($planName),
-                            $sid,
-                            $closing,
-                            $day->toDateString(),
-                            $e->getMessage()
-                        ));
                     }
+
+                    DB::commit();
+                    $this->info(sprintf(
+                        'PAID → PLAN=%s SPONSOR=%d CLOSE=%d DATE=%s PAYABLE=%.2f FROM=%s',
+                        strtoupper($planName), $sid, $closing, $day->toDateString(), $payable, $triggerBuyerId ?? 'null'
+                    ));
+                } catch (\Throwable $e) {
+                    DB::rollBack();
+                    $this->error(sprintf(
+                        'ERR → PLAN=%s SPONSOR=%d CLOSE=%d DATE=%s :: %s',
+                        strtoupper($planName), $sid, $closing, $day->toDateString(), $e->getMessage()
+                    ));
                 }
-                // if $payable == 0 → no write, no row in _payout, no wallet credit
             }
         }
 
@@ -183,8 +209,7 @@ class RunBinaryMatching extends Command
     }
 
     /**
-     * Checks if sponsor is qualified via self purchase at or before $asOf.
-     * Required self plan level must be >= the current planName level.
+     * Qualified if sponsor has self-purchase at or above plan level by $asOf.
      */
     private function sponsorQualifiedBySelfPurchase(int $sponsorId, string $planName, Carbon $asOf): bool
     {
@@ -198,12 +223,12 @@ class RunBinaryMatching extends Command
             ->unique()
             ->all();
 
-        $sLevel = 0;
+        $selfLevel = 0;
         foreach ($types as $t) {
-            $sLevel = max($sLevel, $this->order[$t] ?? 0);
+            $selfLevel = max($selfLevel, $this->order[$t] ?? 0);
         }
 
         $need = $this->order[$planName] ?? 99;
-        return $sLevel >= $need;
+        return $selfLevel >= $need;
     }
 }

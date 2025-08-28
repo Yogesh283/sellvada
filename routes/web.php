@@ -10,6 +10,8 @@ use Illuminate\Support\Carbon;   // 👈 add this
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\PayoutController;
+
 
 
 
@@ -52,5 +54,9 @@ Route::middleware(['auth','verified'])->post('/checkout', [CheckoutController::c
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/cart', [CartController::class, 'show'])->name('cart.show');
     Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+});
+
+Route::middleware(['auth','verified'])->group(function () {
+    Route::get('/payouts', [PayoutController::class, 'index'])->name('payouts.index');
 });
 require __DIR__.'/auth.php';
