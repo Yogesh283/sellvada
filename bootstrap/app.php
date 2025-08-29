@@ -8,8 +8,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 // Dev-only providers (safe for production)
 $extraProviders = [];
 $isLocal = (($_ENV['APP_ENV'] ?? null) === 'local') || (function_exists('env') && env('APP_ENV') === 'local');
-if ($isLocal && class_exists(\Laravel\Pail\PailServiceProvider::class)) {
-    $extraProviders[] = \Laravel\Pail\PailServiceProvider::class;
+if (false) {
 }
 
 return Application::configure(basePath: dirname(__DIR__))

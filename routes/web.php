@@ -1,4 +1,5 @@
 <?php
+namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,8 @@ use App\Http\Controllers\BinarySummaryController;
   use App\Http\Controllers\VipRepurchaseSalaryController;
   use App\Http\Controllers\DepositController;
   use App\Http\Controllers\Admin\WalletDepositAdminController;
+  use App\Http\Controllers\AddressController;
+
 
 
 
@@ -239,5 +242,26 @@ Route::middleware(['auth','verified','can:admin'])
         ]);
     });
 })->middleware('throttle:10,1');
+
+
+
+
+
+
+Route::middleware(['auth','verified'])->group(function () {
+    Route::get('/address', [AddressController::class, 'index'])->name('address.index');
+    Route::post('/address', [AddressController::class, 'store'])->name('address.store');
+    Route::put('/address/{address}', [AddressController::class, 'update'])->name('address.update');
+    Route::delete('/address/{address}', [AddressController::class, 'destroy'])->name('address.delete');
+    Route::post('/address/{address}/default', [AddressController::class, 'makeDefault'])->name('address.default');
+});
+
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/card', [CartController::class, 'show'])->name('cart.show');
+    // Your existing checkout route should already exist:
+    // Route::post('/checkout', [SellController::class, 'checkout'])->name('checkout');
+});
+
 
 require __DIR__.'/auth.php';

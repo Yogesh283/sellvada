@@ -1,17 +1,22 @@
-// resources/js/Pages/Card.jsx
 import React, { useMemo, useState, useEffect } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
 
-
 const formatINR = (n) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(n);
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n || 0));
 
 const lsKey = "cart";
 const loadCart = () => {
-  try { const raw = localStorage.getItem(lsKey); return raw ? JSON.parse(raw) : []; } catch { return []; }
+  try {
+    const raw = localStorage.getItem(lsKey);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 };
-const saveCart = (items) => { try { localStorage.setItem(lsKey, JSON.stringify(items)); } catch { } };
+const saveCart = (items) => {
+  try { localStorage.setItem(lsKey, JSON.stringify(items)); } catch {}
+};
 
 function QtyButton({ onClick, children, disabled, "aria-label": ariaLabel }) {
   return (
@@ -54,18 +59,14 @@ function CartRow({ item, onInc, onDec, onRemove }) {
 }
 
 export default function Card({ items: serverItems = null, shipping = 49 }) {
-  // Inertia props
-  const { walletBalance = 0 } = usePage().props;
-  console.log('walletBalance:', walletBalance);
+  // Receive server props
+  const { walletBalance = 0, defaultAddress = null } = usePage().props;
 
-  // Prefer serverItems (if provided), else localStorage
   const [items, setItems] = useState(serverItems || []);
-
-  // Toasts
   const [toast, setToast] = useState(null);
-  const [toastType, setToastType] = useState("success"); // "success" | "error"
-  const showSuccess = (msg = "Order placed successfully!") => { setToastType("success"); setToast(msg); setTimeout(() => setToast(null), 2500); };
-  const showError = (msg = "Something went wrong.") => { setToastType("error"); setToast(msg); setTimeout(() => setToast(null), 2500); };
+  const [toastType, setToastType] = useState("success");
+  const showSuccess = (msg) => { setToastType("success"); setToast(msg || "Order placed successfully!"); setTimeout(() => setToast(null), 2500); };
+  const showError = (msg) => { setToastType("error"); setToast(msg || "Something went wrong."); setTimeout(() => setToast(null), 2500); };
 
   useEffect(() => {
     if (!serverItems) {
@@ -93,17 +94,21 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
   const dec = (id) => setItems((arr) => arr.map((it) => (it.id === id && it.qty > 1 ? { ...it, qty: it.qty - 1 } : it)));
   const removeItem = (id) => setItems((arr) => arr.filter((it) => it.id !== id));
 
-  const applyCoupon = (e) => { e.preventDefault(); setAppliedCoupon(coupon.trim().toUpperCase()); };
-
+  const applyCoupon = (e) => { e.preventDefault(); setAppliedCoupon(coupon.trim().toUpperCase() || null); };
   const clearCartEverywhere = () => { setItems([]); saveCart([]); setAppliedCoupon(null); setCoupon(""); };
-
-  const isInsufficient = walletBalance < Number(grand);
 
   const onCheckout = (e) => {
     e.preventDefault();
     if (!items.length || processing) return;
 
-    if (isInsufficient) { showError("Insufficient wallet balance to complete this order."); return; }
+    if (!defaultAddress) {
+      showError("Please add a shipping address before checkout.");
+      return;
+    }
+    if (walletBalance < Number(grand)) {
+      showError("Insufficient wallet balance to complete this order.");
+      return;
+    }
 
     router.post('/checkout', { items, coupon: appliedCoupon, shipping }, {
       onStart: () => setProcessing(true),
@@ -111,8 +116,6 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
       onSuccess: () => { showSuccess('Order placed successfully!'); clearCartEverywhere(); },
       onError: (errors) => { if (errors?.wallet) showError(errors.wallet); else showError('Checkout failed.'); },
     });
-
-
   };
 
   return (
@@ -133,8 +136,36 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
 
         {/* CONTENT */}
         <div className="mx-auto max-w-6xl px-3 sm:px-6 py-4 sm:py-8 grid gap-4 sm:gap-6 lg:grid-cols-[1.2fr_.8fr]">
-          {/* CART ITEMS */}
+          {/* CART + ADDRESS */}
           <section className="rounded-2xl bg-white p-4 sm:p-6 shadow ring-1 ring-slate-100">
+            {/* Shipping address box */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold">Shipping Address</h3>
+                <a href="/address" className="text-indigo-600 text-sm hover:underline">Manage Addresses</a>
+              </div>
+
+              {!defaultAddress ? (
+                <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  No address found. Please add an address before checkout.{" "}
+                  <a href="/address" className="underline">Add Address</a>
+                </div>
+              ) : (
+                <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <div className="font-semibold">
+                    {defaultAddress.name} ({defaultAddress.phone})
+                  </div>
+                  <div>
+                    {defaultAddress.line1}
+                    {defaultAddress.line2 ? `, ${defaultAddress.line2}` : ""},{" "}
+                    {defaultAddress.city}, {defaultAddress.state} - {defaultAddress.pincode}
+                  </div>
+                  <div>{defaultAddress.country}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Table header */}
             {items.length === 0 ? (
               <div className="py-10 sm:py-16 text-center">
                 <div className="text-lg sm:text-xl font-semibold text-slate-900">Your cart is empty</div>
@@ -149,7 +180,7 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
 
                 <div className="divide-y divide-slate-100">
                   {items.map((it) => (
-                    <CartRow key={it.id} item={it} onInc={() => inc(it.id)} onDec={() => dec(it.id)} onRemove={() => removeItem(it.id)} />
+                    <CartRow key={it.id} item={it} onInc={() => setItems(arr => arr.map(x => x.id === it.id ? { ...x, qty: x.qty + 1 } : x))} onDec={() => setItems(arr => arr.map(x => (x.id === it.id && x.qty > 1) ? { ...x, qty: x.qty - 1 } : x))} onRemove={() => setItems(arr => arr.filter(x => x.id !== it.id))} />
                   ))}
                 </div>
 
@@ -167,7 +198,7 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
           <aside className="h-max rounded-2xl bg-white p-4 sm:p-6 shadow ring-1 ring-slate-100 lg:sticky lg:top-6">
             <h2 className="text-base sm:text-lg font-semibold text-slate-900">Order Summary</h2>
 
-            {/* Wallet Balance block */}
+            {/* Wallet Balance */}
             <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[13px] sm:text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Wallet Balance</span>
@@ -180,27 +211,46 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
               )}
             </div>
 
-            <div className="mt-3 space-y-1.5 sm:space-y-2 text-[13px] sm:text-sm">
-              <div className="flex items-center justify-between"><span className="text-slate-600">Subtotal</span><span className="font-medium text-slate-900">{formatINR(subTotal)}</span></div>
-              <div className="flex items-center justify-between"><span className="text-slate-600">Discount</span><span className="font-medium text-emerald-700">− {formatINR(discount)}</span></div>
-              <div className="flex items-center justify-between"><span className="text-slate-600">Tax (5%)</span><span className="font-medium text-slate-900">{formatINR(tax)}</span></div>
-              <div className="flex items-center justify-between"><span className="text-slate-600">Shipping</span><span className="font-medium text-slate-900">{items.length ? formatINR(shipping) : formatINR(0)}</span></div>
-              <div className="my-2 border-t border-slate-200" />
-              <div className="flex items-center justify-between text-base font-bold text-slate-900"><span>Total</span><span>{formatINR(grand)}</span></div>
-            </div>
+       <div className="mt-3 space-y-1.5 sm:space-y-2 text-[13px] sm:text-sm">
+  <div className="flex items-center justify-between">
+    <span className="text-slate-600">Subtotal</span>
+    <span className="font-medium text-slate-900">{formatINR(subTotal)}</span>
+  </div>
 
+  <div className="my-2 border-t border-slate-200" />
+
+  <div className="flex items-center justify-between text-base font-bold text-slate-900">
+    <span>Total</span>
+    <span>{formatINR(grand)}</span>
+  </div>
+</div>
+
+
+            {/* CTA */}
             <div className="mt-4 sm:mt-5 grid gap-2 sm:gap-3">
-              <button onClick={onCheckout} disabled={processing || items.length === 0} className="w-full inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700 disabled:opacity-60" type="button">
+              <button
+                onClick={onCheckout}
+                disabled={processing || items.length === 0}
+                className="w-full inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700 disabled:opacity-60"
+                type="button"
+              >
                 {processing ? "Processing..." : "Proceed to Checkout"}
               </button>
               <a href="/" className="w-full inline-flex items-center justify-center rounded-lg border border-slate-200 px-5 py-2.5 text-slate-700 font-semibold hover:bg-slate-50">Continue Shopping</a>
             </div>
 
+            {!defaultAddress && (
+              <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                Please select a shipping address before checkout.{" "}
+                <a href="/address" className="underline">Add Address</a>
+              </div>
+            )}
+
             <div className="mt-6 text-[11px] text-slate-500">Payments supported: UPI, Cards, NetBanking. Secure checkout.</div>
           </aside>
         </div>
 
-        {/* MOBILE BOTTOM BAR CTA */}
+        {/* Mobile bottom bar */}
         {items.length > 0 && (
           <div className="lg:hidden sticky bottom-0 inset-x-0 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
             <div className="mx-auto max-w-6xl px-3 py-2 sm:px-6 sm:py-3 flex items-center justify-between gap-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
@@ -208,7 +258,12 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
                 <div className="text-slate-600">Total</div>
                 <div className="font-semibold text-slate-900">{formatINR(grand)}</div>
               </div>
-              <button onClick={onCheckout} disabled={processing || items.length === 0} className="inline-flex flex-1 justify-center rounded-lg bg-sky-600 px-4 py-2.5 text-white font-semibold hover:bg-sky-700 disabled:opacity-60" type="button">
+              <button
+                onClick={onCheckout}
+                disabled={processing || items.length === 0}
+                className="inline-flex flex-1 justify-center rounded-lg bg-sky-600 px-4 py-2.5 text-white font-semibold hover:bg-sky-700 disabled:opacity-60"
+                type="button"
+              >
                 {processing ? "Processing..." : "Checkout"}
               </button>
             </div>

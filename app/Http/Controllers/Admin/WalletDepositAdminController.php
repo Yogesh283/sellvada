@@ -1,4 +1,3 @@
-
 <?php
 
 namespace App\Http\Controllers\Admin;
@@ -16,11 +15,12 @@ class WalletDepositAdminController extends Controller
             ->select('wallet_deposits.*','users.name as user_name','users.email');
 
         if ($r->filled('status')) {
-            $q->where('wallet_deposits.status',$r->string('status'));
+            $q->where('wallet_deposits.status', $r->string('status'));
         }
 
         $rows = $q->orderByDesc('wallet_deposits.id')->paginate(20);
-        return response()->json($rows); // abhi JSON; baad me UI laga denge
+
+        return response()->json($rows);
     }
 
     public function approve(int $id)
@@ -31,21 +31,18 @@ class WalletDepositAdminController extends Controller
             if ($row->status === 'approved') return;
             if ($row->status === 'rejected') abort(400, 'Already rejected');
 
-            // 1) mark approved
             DB::table('wallet_deposits')->where('id',$id)->update([
                 'status'      => 'approved',
                 'approved_at' => now(),
                 'updated_at'  => now(),
             ]);
 
-            // 2) credit wallet (type = main)
             $inc = number_format((float)$row->amount, 2, '.', '');
 
             $affected = DB::update(
                 "UPDATE wallet SET amount = amount + ? WHERE user_id = ? AND type = 'main'",
                 [$inc, $row->user_id]
             );
-
             if ($affected === 0) {
                 DB::table('wallet')->insert([
                     'user_id'    => $row->user_id,
@@ -56,7 +53,6 @@ class WalletDepositAdminController extends Controller
                 ]);
             }
 
-            // 3) optional: payout/ledger
             if (DB::getSchemaBuilder()->hasTable('_payout')) {
                 DB::table('_payout')->insert([
                     'user_id'      => $row->user_id,
