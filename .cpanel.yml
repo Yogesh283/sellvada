@@ -1,7 +1,40 @@
+# ---
+# deployment:
+#   tasks:
+#     - export COMPOSER=/opt/cpanel/composer/bin/composer
+#     - $COMPOSER install --no-dev --optimize-autoloader
+#     - php artisan migrate --force
+#     - php artisan optimize
+
+
 ---
 deployment:
   tasks:
-    - export COMPOSER=/opt/cpanel/composer/bin/composer
-    - $COMPOSER install --no-dev --optimize-autoloader
-    - php artisan migrate --force
-    - php artisan optimize
+    - export APP_ROOT=/home/dgadspac/repositories/sellvada
+    - export WEBROOT=/home/dgadspac/public_html
+    - export PHP=/opt/cpanel/ea-php82/root/usr/bin/php
+
+    # PHP deps (dev skip)
+    - /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+    # Ensure APP_KEY (run once ok)
+    - 'grep -q "^APP_KEY=" "$APP_ROOT/.env" || $PHP artisan key:generate --force'
+
+    # Clear + rebuild caches
+    - '$PHP artisan optimize:clear'
+    - '$PHP artisan config:cache'
+    - '$PHP artisan route:cache'
+    - '$PHP artisan view:cache'
+
+    # Public assets sync (server ke index.php ko NA chhedo)
+    - 'rsync -a --delete --exclude "index.php" "$APP_ROOT/public/" "$WEBROOT/"'
+
+    # Live index.php set from deploy file
+    - 'install -m 0644 "$APP_ROOT/deploy/index.php.live" "$WEBROOT/index.php"'
+
+    # Storage symlink (idempotent)
+    - 'ln -sfn "$APP_ROOT/storage/app/public" "$WEBROOT/storage"'
+
+    # Opcache reset (safe if available)
+    - '$PHP -r "function_exists(\"opcache_reset\") && opcache_reset();" || true'
+

@@ -14,7 +14,43 @@ use App\Http\Controllers\PayoutController;
 use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\BuyController;
 use App\Http\Controllers\ShopController;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Http\Request;
 
+
+/* ---------- CRON TEST ROUTES ---------- */
+Route::get('/_cron/binary/{closing}', function ($closing, \Illuminate\Http\Request $r) {
+    abort_unless(hash_equals(env('CRON_TOKEN',''), (string) $r->query('token')), 403);
+    $args = ['closing' => (int) $closing];
+    if ($r->query('date')) { $args['--date'] = $r->query('date'); }
+
+    $code = \Illuminate\Support\Facades\Artisan::call('binary:match', $args);
+
+    return response()->json([
+        'ok'   => $code === 0,
+        'cmd'  => 'binary:match',
+        'args' => $args,
+        'out'  => \Illuminate\Support\Facades\Artisan::output(),
+    ]);
+})->middleware('throttle:6,1');
+
+Route::get('/_cron/star', function (\Illuminate\Http\Request $r) {
+    abort_unless(hash_equals(env('CRON_TOKEN',''), (string) $r->query('token')), 403);
+
+    $args = [];
+    if ($r->query('date')) { $args['--date'] = $r->query('date'); }
+    if ($r->boolean('dry')) { $args['--dry'] = true; }
+
+    $code = \Illuminate\Support\Facades\Artisan::call('star:compute', $args);
+
+    return response()->json([
+        'ok'   => $code === 0,
+        'cmd'  => 'star:compute',
+        'args' => $args,
+        'out'  => \Illuminate\Support\Facades\Artisan::output(),
+    ]);
+})->middleware('throttle:6,1');
+/* ---------- /CRON TEST ROUTES ---------- */
 
 
 
