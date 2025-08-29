@@ -147,9 +147,9 @@ function ProductCard({ product, bullets = [] }) {
               className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700"
               type="button"
             >
-              Add to Cart
+             Buy Now
             </button>
-            <LinkButton href="/buy" variant="outline">Buy Now</LinkButton>
+            {/* <LinkButton href="/buy" variant="outline">Buy Now</LinkButton> */}
           </div>
         </div>
       </div>
@@ -234,9 +234,9 @@ export default function Welcome() {
                       className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700"
                       type="button"
                     >
-                      Add To Cart
+                     Buy Now
                     </button>
-                    <LinkButton href="/buy" variant="outline">Buy Now</LinkButton>
+                    {/* <LinkButton href="/buy" variant="outline">Buy Now</LinkButton> */}
                   </div>
                 </div>
               </div>

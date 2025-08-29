@@ -6,9 +6,10 @@ import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function AuthenticatedLayout({ header, children }) {
-  // guest mode में भी सुरक्षित
   const user = usePage().props?.auth?.user ?? null;
   const [open, setOpen] = useState(false);
+
+  const is = (name) => (typeof route !== 'undefined' ? route().current(name) : false);
 
   return (
     <div className="min-h-screen bg-gray-50 text-black">
@@ -19,34 +20,35 @@ export default function AuthenticatedLayout({ header, children }) {
             {/* Left: Logo + links */}
             <div className="flex items-center gap-7">
               <Link href="/" className="flex items-center gap-2 shrink-0">
-                {/* ApplicationLogo अंदर fill-current हो तो text-green-600 दिखेगा */}
-                <img src="/image/11111.png" alt="Logo" className="bg-white-600 h-14 w-auto" />
+                {/* Use your logo image or <ApplicationLogo /> */}
+                <img src="/image/11111.png" alt="Logo" className="h-10 w-auto" />
                 <span className="hidden sm:block font-semibold text-lg tracking-tight">
                   Cellvada
                 </span>
               </Link>
 
               <div className="hidden sm:flex items-center gap-6 font-medium">
-                <NavLink
-                  href={route('dashboard')}
-                  active={route().current('dashboard')}
-                  className="text-black"
-                >
+                <NavLink href={route('dashboard')} active={is('dashboard')} className="text-black">
                   Dashboard
                 </NavLink>
 
-                <NavLink
-                  href="/"
-                  active={route().current('home')}
-                  className="text-black"
-                >
+                {/* Adjust if you actually have a named 'home' route */}
+                <NavLink href="/" active={is('home')} className="text-black">
                   Home
                 </NavLink>
-              </div>
 
+                {/* Deposit uses the named route so 'active' can match */}
+                <NavLink
+                  href={route('wallet.deposit')}
+                  active={is('wallet.deposit')}
+                  className="text-black"
+                >
+                  Deposit
+                </NavLink>
+              </div>
             </div>
 
-            {/* Right: user / guest actions */}
+            {/* Right: user / guest actions (desktop) */}
             <div className="hidden sm:flex items-center">
               {user ? (
                 <Dropdown>
@@ -95,7 +97,7 @@ export default function AuthenticatedLayout({ header, children }) {
 
             {/* Mobile: hamburger */}
             <button
-              onClick={() => setOpen(v => !v)}
+              onClick={() => setOpen((v) => !v)}
               className="sm:hidden p-2 rounded-md text-gray-700 hover:bg-gray-100 focus:outline-none"
               aria-label="Toggle navigation"
             >
@@ -116,11 +118,14 @@ export default function AuthenticatedLayout({ header, children }) {
         {open && (
           <div className="sm:hidden border-t border-gray-200 bg-white">
             <div className="space-y-1 px-2 pt-2 pb-3">
-              <ResponsiveNavLink href={route('dashboard')} active={route().current('dashboard')}>
+              <ResponsiveNavLink href={route('dashboard')} active={is('dashboard')}>
                 Dashboard
               </ResponsiveNavLink>
-              <ResponsiveNavLink href="/" active={route().current('home')}>
+              <ResponsiveNavLink href="/" active={is('home')}>
                 Home
+              </ResponsiveNavLink>
+              <ResponsiveNavLink href={route('wallet.deposit')} active={is('wallet.deposit')}>
+                Deposit
               </ResponsiveNavLink>
             </div>
 

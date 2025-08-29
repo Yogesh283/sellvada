@@ -5,13 +5,9 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
-/**
- * Build an array of extra providers (prod-safe).
- * - Only include Laravel\Pail\PailServiceProvider in local and if the class exists (installed).
- */
+// Dev-only providers (safe for production)
 $extraProviders = [];
 $isLocal = (($_ENV['APP_ENV'] ?? null) === 'local') || (function_exists('env') && env('APP_ENV') === 'local');
-
 if ($isLocal && class_exists(\Laravel\Pail\PailServiceProvider::class)) {
     $extraProviders[] = \Laravel\Pail\PailServiceProvider::class;
 }
@@ -31,21 +27,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         // customize if needed
     })
-    // IMPORTANT: Must be an array (not a Closure) in Laravel 12
-    ->withProviders($extraProviders)
+    ->withProviders($extraProviders) // must be an array
     ->withSchedule(function (Schedule $schedule): void {
-        // IST windows
-        $schedule->command('binary:match 1')
-            ->dailyAt('12:01')
-            ->timezone('Asia/Kolkata')
-            ->withoutOverlapping();
-
-        $schedule->command('binary:match 2')
-            ->dailyAt('23:59')
-            ->timezone('Asia/Kolkata')
-            ->withoutOverlapping();
-
-        // For testing only:
-        // $schedule->command('binary:match 1')->everyMinute()->timezone('Asia/Kolkata')->withoutOverlapping();
+        $schedule->command('binary:match 1')->dailyAt('12:01')->timezone('Asia/Kolkata')->withoutOverlapping();
+        $schedule->command('binary:match 2')->dailyAt('23:59')->timezone('Asia/Kolkata')->withoutOverlapping();
+        // $schedule->command('binary:match 1')->everyMinute()->timezone('Asia/Kolkata')->withoutOverlapping(); // test only
     })
     ->create();
