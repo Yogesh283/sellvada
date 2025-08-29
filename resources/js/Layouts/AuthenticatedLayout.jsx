@@ -45,6 +45,14 @@ export default function AuthenticatedLayout({ header, children }) {
                 >
                   Deposit
                 </NavLink>
+
+                    <NavLink
+                  href={route('wallet.withdraw')}
+                  active={is('wallet.withdraw')}
+                  className="text-black"
+                >
+                  Withdraw
+                </NavLink>
               </div>
             </div>
 

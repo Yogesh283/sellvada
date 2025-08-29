@@ -23,6 +23,8 @@ use App\Http\Controllers\BinarySummaryController;
   use App\Http\Controllers\DepositController;
   use App\Http\Controllers\Admin\WalletDepositAdminController;
   use App\Http\Controllers\AddressController;
+  use App\Http\Controllers\WithdrawalController;
+
 
 
 
@@ -262,6 +264,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Your existing checkout route should already exist:
     // Route::post('/checkout', [SellController::class, 'checkout'])->name('checkout');
 });
+
+
+// use App\Http\Controllers\Admin\WithdrawalAdminController;
+
+Route::middleware(['auth','verified'])->group(function () {
+    Route::get('/wallet/withdraw',  [WithdrawalController::class, 'index'])->name('wallet.withdraw');
+    Route::post('/wallet/withdraw', [WithdrawalController::class, 'store'])->name('wallet.withdraw.store');
+});
+
+// /**
+//  * Token-protected admin action (like your deposits).
+//  * Example:
+//  *   https://yourdomain.com/_admin/withdrawals/123/approve?token=ADMIN_APPROVE_TOKEN&ref=UTR123
+//  */
+// Route::get('/_admin/withdrawals/{id}/approve', [WithdrawalAdminController::class, 'approve']);
+// Route::get('/_admin/withdrawals/{id}/reject',  [WithdrawalAdminController::class, 'reject']);
+
 
 
 require __DIR__.'/auth.php';
