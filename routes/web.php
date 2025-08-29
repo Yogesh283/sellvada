@@ -16,6 +16,13 @@ use App\Http\Controllers\BuyController;
 use App\Http\Controllers\ShopController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Http\Request;
+use App\Http\Controllers\BinarySummaryController;
+  use App\Http\Controllers\StarIncomeController;
+  use App\Http\Controllers\VipRepurchaseSalaryController;
+
+
+
+
 
 
 /* ---------- CRON TEST ROUTES ---------- */
@@ -116,4 +123,21 @@ Route::middleware(['auth','verified'])->group(function () {
 
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 
+
+
+Route::middleware(['web', 'auth', 'verified'])
+    ->get('/income/binary', [BinarySummaryController::class, 'show'])
+    ->name('income.binary');
+
+
+Route::middleware(['web','auth','verified'])
+    ->get('/income/star', [StarIncomeController::class, 'show'])
+    ->name('income.star');
+
+    Route::middleware(['web','auth','verified'])
+    ->get('/income/vip-repurchase-salary', [VipRepurchaseSalaryController::class, 'index'])
+    ->name('income.vip-repurchase');
+
+
+  
 require __DIR__.'/auth.php';

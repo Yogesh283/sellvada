@@ -148,19 +148,18 @@ export default function Dashboard() {
 
         {/* Top metric cards */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Wallet Balance" value={availableBalance} gradient={G.lemonOcean} icon="💰" actionHref="/wallet/payout" />
-          {/* 🔗 fixed to lowercase route */}
-          <StatCard title="Total Payout Wallet" value={payoutBalance} gradient={G.royal} icon="🔓" actionHref="/payouts" />
-          <StatCard title="Today Profit" value={Today} gradient={G.fire} icon="💼" actionHref="/wallet" />
-          <StatCard title="Money Out" value={moneyOut} gradient={G.ocean} icon="💸" actionHref="/withdrawals" />
+          <StatCard title="Wallet Balance" value={availableBalance} />
+          <StatCard title="Total Income" value={payoutBalance} gradient={G.royal} icon="💼" actionHref="/payouts" />
+          <StatCard title="Binary Maching"   actionHref="/income/binary" />
+          <StatCard title="Star Maching" value={moneyOut} gradient={G.ocean} icon="💸" actionHref="/income/star" />
         </div>
 
         {/* Profile & My Team row */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard title="VIP Repurchase Salary" value=" " gradient={G.ocean} icon="📍" actionHref="/income/vip-repurchase-salary" />
           <StatCard title="MY PROFILE" value=" " gradient={G.royal} icon="👤" actionHref="/profile" />
           <StatCard title="MY INCOME" value=" " gradient={G.steel} icon="₹" actionHref="/income" />
           <StatCard title="MY TEAM" value={TotalTeam} gradient={G.fire} icon="👥" actionHref="/team" />
-          <StatCard title="MY PIN" value=" " gradient={G.ocean} icon="📍" actionHref="/pins" />
         </div>
 
         {/* Accounts/Team counters */}
