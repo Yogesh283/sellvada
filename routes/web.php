@@ -27,16 +27,6 @@ use App\Http\Controllers\BinarySummaryController;
 
 
 
-
-
-
-
-
-
-
-
-
-
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
