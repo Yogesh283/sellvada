@@ -5,13 +5,8 @@ import { Head, usePage } from "@inertiajs/react";
 
 /* -------------------- UI helpers -------------------- */
 const G = {
-  sunrise: "bg-gradient-to-r from-yellow-400 via-blue-600 to-blue-800",
-  ocean: "bg-gradient-to-r from-teal-500 via-emerald-600 to-cyan-600",
-  fire: "bg-gradient-to-r from-red-500 via-rose-500 to-orange-500",
-  royal: "bg-gradient-to-r from-blue-800 via-blue-600 to-indigo-700",
-  steel: "bg-gradient-to-r from-sky-500 via-blue-600 to-red-500",
-  lemonOcean: "bg-gradient-to-r from-yellow-400 via-blue-600 to-cyan-600",
-  pinkBar: "bg-gradient-to-r from-rose-500 via-pink-500 to-rose-400",
+  emerald: "bg-gradient-to-r from-emerald-500 via-emerald-600 to-green-600",
+  emeraldBar: "bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700",
 };
 
 const formatINR = (n) => {
@@ -31,7 +26,14 @@ const formatDT = (s) => {
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
 };
 
-function StatCard({ title, value = "₹0.00", gradient = G.sunrise, icon = "💳", actionText = "View Detail", actionHref = "#" }) {
+function StatCard({
+  title,
+  value = "₹0.00",
+  gradient = G.emerald, // ✅ default green
+  icon = "💳",
+  actionText = "View Detail",
+  actionHref = "#",
+}) {
   return (
     <div className={`${gradient} relative overflow-hidden rounded-lg shadow-md`}>
       <div className="px-5 py-4 text-white">
@@ -43,7 +45,10 @@ function StatCard({ title, value = "₹0.00", gradient = G.sunrise, icon = "💳
           {value}
         </div>
         <div className="mt-3">
-          <a href={actionHref} className="inline-flex items-center rounded-md bg-white/15 px-3 py-1.5 text-xs font-medium hover:bg-white/25 transition">
+          <a
+            href={actionHref}
+            className="inline-flex items-center rounded-md bg-white/15 px-3 py-1.5 text-xs font-medium hover:bg-white/25 transition"
+          >
             {actionText}
           </a>
         </div>
@@ -67,8 +72,16 @@ function CopyField({ label, value }) {
   return (
     <div className="flex items-center gap-2">
       <div className="min-w-28 text-sm font-medium text-slate-700">{label}</div>
-      <input className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800" value={value || ""} readOnly />
-      <button onClick={copy} className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" type="button">
+      <input
+        className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800"
+        value={value || ""}
+        readOnly
+      />
+      <button
+        onClick={copy}
+        className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
+        type="button"
+      >
         {copied ? "Copied!" : "Copy"}
       </button>
     </div>
@@ -110,7 +123,6 @@ export default function Dashboard() {
   const referralId = user?.referral_id ?? "-";
   const createdAt = formatDT(user?.created_at);
 
-  // Optional extra wallet metrics (also INR)
   const moneyOut = formatINR(wallets?.withdraw_total ?? 0);
 
   const directReferrals = Number(stats?.direct_referrals ?? 0);
@@ -128,9 +140,15 @@ export default function Dashboard() {
           <div className="grid gap-4 p-4 md:grid-cols-2">
             <div className="text-sm text-slate-700">
               <div className="text-slate-900 font-semibold">Welcome {userName}</div>
-              <div>User ID: <span className="font-mono text-slate-900">{userId}</span></div>
-              <div className="mt-1">Referral ID: <span className="font-mono text-slate-900">{referralId}</span></div>
-              <div className="mt-1">Joined: <span className="font-medium">{createdAt}</span></div>
+              <div>
+                User ID: <span className="font-mono text-slate-900">{userId}</span>
+              </div>
+              <div className="mt-1">
+                Referral ID: <span className="font-mono text-slate-900">{referralId}</span>
+              </div>
+              <div className="mt-1">
+                Joined: <span className="font-medium">{createdAt}</span>
+              </div>
 
               <div className="mt-3 text-slate-500 text-xs">Quick Copy</div>
               <div className="mt-2 space-y-2">
@@ -140,36 +158,48 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-end justify-end gap-2">
-              <a href="/profile" className="rounded bg-sky-600 px-3 py-2 text-white text-sm font-semibold hover:bg-sky-700">View Profile</a>
-              <a href="/team" className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700">My Team</a>
+              <a
+                href="/profile"
+                className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700"
+              >
+                View Profile
+              </a>
+              <a
+                href="/team"
+                className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700"
+              >
+                My Team
+              </a>
             </div>
           </div>
         </div>
 
-        {/* Top metric cards */}
+        {/* Top metric cards (all green) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Wallet Balance" value={availableBalance} />
-          <StatCard title="Total Income" value={payoutBalance} gradient={G.royal} icon="💼" actionHref="/payouts" />
-          <StatCard title="Binary Maching"   actionHref="/income/binary" />
-          <StatCard title="Star Maching" value={moneyOut} gradient={G.ocean} icon="💸" actionHref="/income/star" />
+          <StatCard title="Wallet Balance" value={availableBalance} icon="👛" />
+          <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" />
+          <StatCard title="Binary Matching" value={Today} icon="🧮" actionHref="/income/binary" />
+          <StatCard title="Star Matching" value={moneyOut} icon="💸" actionHref="/income/star" />
         </div>
 
-        {/* Profile & My Team row */}
+        {/* Profile & My Team row (all green) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="VIP Repurchase Salary" value=" " gradient={G.ocean} icon="📍" actionHref="/income/vip-repurchase-salary" />
-          <StatCard title="MY PROFILE" value=" " gradient={G.royal} icon="👤" actionHref="/profile" />
-          <StatCard title="MY INCOME" value=" " gradient={G.steel} icon="₹" actionHref="/income" />
-          <StatCard title="MY TEAM" value={TotalTeam} gradient={G.fire} icon="👥" actionHref="/team" />
+          <StatCard title="VIP Repurchase Salary" value=" " icon="📍" actionHref="/income/vip-repurchase-salary" />
+          <StatCard title="MY PROFILE" value=" " icon="👤" actionHref="/profile" />
+          <StatCard title="MY INCOME" value=" " icon="₹" actionHref="/income" />
+          <StatCard title="MY TEAM" value={TotalTeam} icon="👥" actionHref="/team" />
         </div>
 
         {/* Accounts/Team counters */}
         <div className="rounded-lg shadow-sm ring-1 ring-slate-100 overflow-hidden">
-          <div className={`${G.royal} px-4 py-3 text-white text-center font-semibold`}>
+          <div className={`${G.emeraldBar} px-4 py-3 text-white text-center font-semibold`}>
             <span className="opacity-90">“ Team Counters ”</span>
           </div>
           <div className="grid gap-4 p-4 md:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Account details</div>
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
+                Account details
+              </div>
               <div className="p-4">
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   <dt className="text-slate-500">Package Name</dt>
@@ -177,7 +207,9 @@ export default function Dashboard() {
                   <dt className="text-slate-500">Register Date & Time</dt>
                   <dd className="text-slate-900 font-medium">{createdAt}</dd>
                   <dt className="text-slate-500">Sponsor</dt>
-                  <dd className="text-slate-900 font-medium">{sponsor ? `${sponsor?.name ?? "-"} (#${sponsor?.id ?? "-"})` : "-"}</dd>
+                  <dd className="text-slate-900 font-medium">
+                    {sponsor ? `${sponsor?.name ?? "-"} (#${sponsor?.id ?? "-"})` : "-"}
+                  </dd>
                   <dt className="text-slate-500">Last Login</dt>
                   <dd className="text-slate-900 font-medium">{formatDT(user?.last_login_at)}</dd>
                 </dl>
@@ -187,21 +219,21 @@ export default function Dashboard() {
             <div className="rounded-lg border border-slate-200 bg-white">
               <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Team Count</div>
               <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
-                  <span className="text-slate-600">Direct Referral Count</span>
-                  <span className="font-bold">{directReferrals}</span>
+                <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2">
+                  <span className="text-slate-700">Direct Referral Count</span>
+                  <span className="font-bold text-emerald-700">{directReferrals}</span>
                 </div>
-                <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
-                  <span className="text-slate-600">Direct PV Count</span>
-                  <span className="font-bold">{directPV}</span>
+                <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2">
+                  <span className="text-slate-700">Direct PV Count</span>
+                  <span className="font-bold text-emerald-700">{directPV}</span>
                 </div>
-                <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
-                  <span className="text-slate-600">Left Team</span>
-                  <span className="font-bold">{leftTeamCount}</span>
+                <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2">
+                  <span className="text-slate-700">Left Team</span>
+                  <span className="font-bold text-emerald-700">{leftTeamCount}</span>
                 </div>
-                <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
-                  <span className="text-slate-600">Right Team</span>
-                  <span className="font-bold">{rightTeamCount}</span>
+                <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2">
+                  <span className="text-slate-700">Right Team</span>
+                  <span className="font-bold text-emerald-700">{rightTeamCount}</span>
                 </div>
               </div>
             </div>
@@ -210,7 +242,9 @@ export default function Dashboard() {
 
         {/* Recent Purchases (Your own) */}
         <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Recent Purchases</div>
+          <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
+            Recent Purchases
+          </div>
           <div className="p-4">
             {!(recent_sells && recent_sells.length) ? (
               <div className="text-slate-600 text-sm">No orders yet.</div>
@@ -247,7 +281,9 @@ export default function Dashboard() {
 
         {/* Team Purchases (any leg) */}
         <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Team Purchases (Your Left/Right)</div>
+          <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
+            Team Purchases (Your Left/Right)
+          </div>
           <div className="p-4">
             {!(team_sells && team_sells.length) ? (
               <div className="text-slate-600 text-sm">No team purchases yet.</div>
@@ -270,8 +306,12 @@ export default function Dashboard() {
                     {team_sells.map((r) => (
                       <tr key={r.id} className="border-b last:border-0">
                         <td className="py-2 pr-4 font-medium">{r.id}</td>
-                        <td className="py-2 pr-4">{r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span></td>
-                        <td className="py-2 pr-4 font-semibold">{r.leg === "R" ? "Right" : r.leg === "L" ? "Left" : r.leg || "-"}</td>
+                        <td className="py-2 pr-4">
+                          {r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span>
+                        </td>
+                        <td className="py-2 pr-4 font-semibold">
+                          {r.leg === "R" ? "Right" : r.leg === "L" ? "Left" : r.leg || "-"}
+                        </td>
                         <td className="py-2 pr-4">{r.product}</td>
                         <td className="py-2 pr-4 uppercase">{r.type}</td>
                         <td className="py-2 pr-4">{formatINR(r.amount)}</td>
@@ -313,7 +353,9 @@ export default function Dashboard() {
                       {team_left_sells.map((r) => (
                         <tr key={r.id} className="border-b last:border-0">
                           <td className="py-2 pr-4 font-medium">{r.id}</td>
-                          <td className="py-2 pr-4">{r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span></td>
+                          <td className="py-2 pr-4">
+                            {r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span>
+                          </td>
                           <td className="py-2 pr-4">{r.product}</td>
                           <td className="py-2 pr-4">{formatINR(r.amount)}</td>
                           <td className="py-2 pr-4">{r.status}</td>
@@ -352,7 +394,9 @@ export default function Dashboard() {
                       {team_right_sells.map((r) => (
                         <tr key={r.id} className="border-b last:border-0">
                           <td className="py-2 pr-4 font-medium">{r.id}</td>
-                          <td className="py-2 pr-4">{r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span></td>
+                          <td className="py-2 pr-4">
+                            {r.buyer_name} <span className="text-slate-400">#{r.buyer_id}</span>
+                          </td>
                           <td className="py-2 pr-4">{r.product}</td>
                           <td className="py-2 pr-4">{formatINR(r.amount)}</td>
                           <td className="py-2 pr-4">{r.status}</td>
@@ -367,8 +411,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Bottom banner */}
-        <div className={`${G.pinkBar} rounded-lg py-8 text-center text-white shadow-md`}>
+        {/* Bottom banner (green) */}
+        <div className={`${G.emeraldBar} rounded-lg py-8 text-center text-white shadow-md`}>
           <div className="text-2xl font-bold">“ News ”</div>
         </div>
       </div>

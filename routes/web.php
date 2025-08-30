@@ -88,9 +88,9 @@ Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.s
 
 
 
-Route::middleware(['web', 'auth', 'verified'])
-    ->get('/income/binary', [BinarySummaryController::class, 'show'])
-    ->name('income.binary');
+// Route::middleware(['web', 'auth', 'verified'])
+//     ->get('/income/binary', [BinarySummaryController::class, 'show'])
+//     ->name('income.binary');
 
 
 Route::middleware(['web','auth','verified'])
@@ -132,5 +132,9 @@ Route::middleware(['auth','verified'])->group(function () {
 });
 
 
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/income/binary', [BinarySummaryController::class, 'show'])
+        ->name('income.binary');
+});
 
 require __DIR__.'/auth.php';
