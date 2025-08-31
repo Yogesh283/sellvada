@@ -7,7 +7,8 @@ import { useState } from 'react';
 
 export default function AuthenticatedLayout({ header, children }) {
   const user = usePage().props?.auth?.user ?? null;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false);           // mobile sheet
+  const [panelOpen, setPanelOpen] = useState(false); // desktop panel
 
   const is = (name) => (typeof route !== 'undefined' ? route().current(name) : false);
 
@@ -20,10 +21,9 @@ export default function AuthenticatedLayout({ header, children }) {
             {/* Left: Logo + links */}
             <div className="flex items-center gap-7">
               <Link href="/" className="flex items-center gap-2 shrink-0">
-                {/* Use your logo image or <ApplicationLogo /> */}
                 <img src="/image/11111.png" alt="Logo" className="h-10 w-auto" />
                 <span className="hidden sm:block font-semibold text-lg tracking-tight">
-                  Cellvada
+                  Cellveda
                 </span>
               </Link>
 
@@ -31,13 +31,9 @@ export default function AuthenticatedLayout({ header, children }) {
                 <NavLink href={route('dashboard')} active={is('dashboard')} className="text-black">
                   Dashboard
                 </NavLink>
-
-                {/* Adjust if you actually have a named 'home' route */}
                 <NavLink href="/" active={is('home')} className="text-black">
-                  Home
+                  Products
                 </NavLink>
-
-                {/* Deposit uses the named route so 'active' can match */}
                 <NavLink
                   href={route('wallet.deposit')}
                   active={is('wallet.deposit')}
@@ -45,8 +41,7 @@ export default function AuthenticatedLayout({ header, children }) {
                 >
                   Deposit
                 </NavLink>
-
-                    <NavLink
+                <NavLink
                   href={route('wallet.withdraw')}
                   active={is('wallet.withdraw')}
                   className="text-black"
@@ -57,34 +52,76 @@ export default function AuthenticatedLayout({ header, children }) {
             </div>
 
             {/* Right: user / guest actions (desktop) */}
-            <div className="hidden sm:flex items-center">
+            <div className="hidden sm:flex items-center relative">
               {user ? (
-                <Dropdown>
-                  <Dropdown.Trigger>
-                    <span className="inline-flex rounded-md">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 focus:outline-none"
-                      >
-                        {user.name}
-                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path
-                            fillRule="evenodd"
-                            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </button>
-                    </span>
-                  </Dropdown.Trigger>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPanelOpen((v) => !v)}
+                    className="inline-flex items-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 focus:outline-none"
+                    aria-haspopup="true"
+                    aria-expanded={panelOpen}
+                  >
+                    {user.name}
+                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path
+                        fillRule="evenodd"
+                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
 
-                  <Dropdown.Content>
-                    <Dropdown.Link href={route('profile.edit')}>Profile</Dropdown.Link>
-                    <Dropdown.Link href={route('logout')} method="post" as="button">
-                      Logout
-                    </Dropdown.Link>
-                  </Dropdown.Content>
-                </Dropdown>
+                  {/* Desktop panel – same content as mobile */}
+                  {panelOpen && (
+                    <div
+                      className="absolute right-0 top-12 w-80 rounded-xl border border-gray-200 bg-white shadow-xl"
+                      onMouseLeave={() => setPanelOpen(false)}
+                    >
+                      <div className="px-4 py-4 border-b border-gray-200">
+                        <div className="text-lg font-bold text-gray-900">{user.name}</div>
+                        <div className="text-sm text-gray-500">{user.email}</div>
+                        <div className="text-sm text-gray-600 mt-1">User ID: {user.id}</div>
+                      </div>
+
+                      <div className="space-y-1 px-2 pt-2 pb-3">
+                        <DesktopMenuLink href={route('dashboard')} active={is('dashboard')} onClick={() => setPanelOpen(false)}>
+                          Dashboard
+                        </DesktopMenuLink>
+                        <DesktopMenuLink href="/" active={is('home')} onClick={() => setPanelOpen(false)}>
+                          Products
+                        </DesktopMenuLink>
+                        <DesktopMenuLink href={route('wallet.deposit')} active={is('wallet.deposit')} onClick={() => setPanelOpen(false)}>
+                          Deposit
+                        </DesktopMenuLink>
+                        <DesktopMenuLink href={route('wallet.withdraw')} active={is('wallet.withdraw')} onClick={() => setPanelOpen(false)}>
+                          Withdrawal
+                        </DesktopMenuLink>
+                      </div>
+
+                      <div className="border-t border-gray-200 px-4 py-3">
+                        <Link
+                          href={route('profile.edit')}
+                          className="block rounded-md px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          onClick={() => setPanelOpen(false)}
+                        >
+                          Profile
+                        </Link>
+                      </div>
+
+                      <div className="border-t border-gray-200 px-4 py-3">
+                        <Link
+                          method="post"
+                          href={route('logout')}
+                          as="button"
+                          className="w-full text-left rounded-md px-2 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                        >
+                          Logout
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="flex items-center gap-3">
                   <Link
@@ -124,37 +161,44 @@ export default function AuthenticatedLayout({ header, children }) {
 
         {/* Mobile menu */}
         {open && (
-          <div className="sm:hidden border-t border-gray-200 bg-white">
+          <div className="sm:hidden bg-white border-t border-gray-200">
+            <div className="px-4 py-4 border-b border-gray-200">
+              {user && (
+                <>
+                  <div className="text-lg font-bold text-gray-900">{user.name}</div>
+                  <div className="text-sm text-gray-500">{user.email}</div>
+                  <div className="text-sm text-gray-600 mt-1">User ID: {user.id}</div>
+                </>
+              )}
+            </div>
+
             <div className="space-y-1 px-2 pt-2 pb-3">
               <ResponsiveNavLink href={route('dashboard')} active={is('dashboard')}>
                 Dashboard
               </ResponsiveNavLink>
               <ResponsiveNavLink href="/" active={is('home')}>
-                Home
+                Products
               </ResponsiveNavLink>
               <ResponsiveNavLink href={route('wallet.deposit')} active={is('wallet.deposit')}>
                 Deposit
               </ResponsiveNavLink>
+              <ResponsiveNavLink href={route('wallet.withdraw')} active={is('wallet.withdraw')}>
+                Withdrawal
+              </ResponsiveNavLink>
             </div>
 
             <div className="border-t border-gray-200 px-4 py-3">
-              {user ? (
-                <>
-                  <div className="text-base font-semibold">{user.name}</div>
-                  <div className="text-sm text-gray-500">{user.email}</div>
-                </>
-              ) : (
-                <div className="mt-2 flex gap-3">
-                  <ResponsiveNavLink href={route('login')}>Login</ResponsiveNavLink>
-                  <ResponsiveNavLink href={route('register')}>Register</ResponsiveNavLink>
-                </div>
-              )}
+              <ResponsiveNavLink href={route('profile.edit')}>Profile</ResponsiveNavLink>
             </div>
 
             {user && (
-              <div className="space-y-1 px-2 py-2 border-t border-gray-200">
-                <ResponsiveNavLink href={route('profile.edit')}>Profile</ResponsiveNavLink>
-                <ResponsiveNavLink method="post" href={route('logout')} as="button">
+              <div className="border-t border-gray-200 px-4 py-3">
+                <ResponsiveNavLink
+                  method="post"
+                  href={route('logout')}
+                  as="button"
+                  className="text-red-600 font-semibold"
+                >
                   Logout
                 </ResponsiveNavLink>
               </div>
@@ -173,5 +217,18 @@ export default function AuthenticatedLayout({ header, children }) {
       {/* Page content */}
       <main>{children}</main>
     </div>
+  );
+}
+
+/* --- helpers for desktop panel links (same visual as ResponsiveNavLink) --- */
+function DesktopMenuLink({ href, active, children, onClick }) {
+  const base =
+    'block rounded-md px-3 py-2 text-sm font-medium transition';
+  const activeCls = 'bg-indigo-50 text-indigo-700';
+  const idleCls = 'text-gray-700 hover:bg-gray-50';
+  return (
+    <Link href={href} className={`${base} ${active ? activeCls : idleCls}`} onClick={onClick}>
+      {children}
+    </Link>
   );
 }

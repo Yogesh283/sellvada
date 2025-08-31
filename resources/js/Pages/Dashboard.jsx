@@ -3,10 +3,28 @@ import React, { useState } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, usePage } from "@inertiajs/react";
 
-/* -------------------- UI helpers -------------------- */
+/* -------------------- UI helpers (with colors) -------------------- */
 const G = {
-  emerald: "bg-gradient-to-r from-emerald-500 via-emerald-600 to-green-600",
-  emeraldBar: "bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700",
+  // Card gradients
+  tealBlue: "bg-gradient-to-r from-cyan-400 to-blue-600",
+  emerald: "bg-gradient-to-r from-emerald-400 to-green-600",
+  orangePink: "bg-gradient-to-r from-orange-400 to-pink-500",
+  purpleIndigo: "bg-gradient-to-r from-purple-500 to-indigo-600",
+  amber: "bg-gradient-to-r from-amber-400 to-yellow-500",
+  sky: "bg-gradient-to-r from-sky-400 to-cyan-600",
+  rose: "bg-gradient-to-r from-rose-500 to-red-600",
+  lime: "bg-gradient-to-r from-lime-400 to-green-600",
+
+  // Bars (section headers)
+  barTeal: "bg-gradient-to-r from-teal-500 via-cyan-500 to-sky-500",
+  barOrange: "bg-gradient-to-r from-orange-500 via-pink-500 to-rose-500",
+  barIndigo: "bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-600",
+  barEmerald: "bg-gradient-to-r from-green-500 via-emerald-600 to-teal-600",
+
+  // Kept from your original (unused now but harmless to keep)
+  emerald: "bg-gradient-to-r from-green-300 via-green-400 to-green-500",
+  emeraldBar: "bg-gradient-to-r from-green-400 via-green-500 to-green-600",
+  whiteGreen: "bg-gradient-to-b from-white via-green-200 to-green-700",
 };
 
 const formatINR = (n) => {
@@ -29,7 +47,7 @@ const formatDT = (s) => {
 function StatCard({
   title,
   value = "₹0.00",
-  gradient = G.emerald, // ✅ default green
+  gradient = G.emerald, // default (but we pass custom ones below)
   icon = "💳",
   actionText = "View Detail",
   actionHref = "#",
@@ -38,7 +56,7 @@ function StatCard({
     <div className={`${gradient} relative overflow-hidden rounded-lg shadow-md`}>
       <div className="px-5 py-4 text-white">
         <div className="flex items-center justify-between">
-          <div className="text-sm/5 font-semibold opacity-90">{title}</div>
+          <div className="text-sm font-semibold opacity-95">{title}</div>
           <div className="text-xl opacity-90">{icon}</div>
         </div>
         <div className="mt-3 text-right text-2xl font-extrabold tabular-nums drop-shadow-[0_1px_0_rgba(0,0,0,0.25)]">
@@ -47,13 +65,13 @@ function StatCard({
         <div className="mt-3">
           <a
             href={actionHref}
-            className="inline-flex items-center rounded-md bg-white/15 px-3 py-1.5 text-xs font-medium hover:bg-white/25 transition"
+            className="inline-flex items-center rounded-md bg-white/20 px-3 py-1.5 text-xs font-semibold hover:bg-white/30 transition"
           >
             {actionText}
           </a>
         </div>
       </div>
-      <div className="pointer-events-none absolute -right-12 -top-10 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
+      <div className="pointer-events-none absolute -right-12 -top-10 h-40 w-40 rounded-full bg-white/20 blur-2xl" />
     </div>
   );
 }
@@ -79,8 +97,8 @@ function CopyField({ label, value }) {
       />
       <button
         onClick={copy}
-        className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
         type="button"
+        className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
       >
         {copied ? "Copied!" : "Copy"}
       </button>
@@ -174,26 +192,26 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Top metric cards (all green) */}
+        {/* Top metric cards (colorful) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Wallet Balance" value={availableBalance} icon="👛" />
-          <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" />
-          <StatCard title="Binary Matching" value={Today} icon="🧮" actionHref="/income/binary" />
-          <StatCard title="Star Matching" value={moneyOut} icon="💸" actionHref="/income/star" />
+          <StatCard title="Wallet Balance" value={availableBalance} icon="👛" gradient={G.tealBlue} />
+          <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" gradient={G.emerald} />
+          <StatCard title="Binary Matching" value="" icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
+          <StatCard title="Star Matching" value="" icon="💸" actionHref="/income/star" gradient={G.purpleIndigo} />
         </div>
 
-        {/* Profile & My Team row (all green) */}
+        {/* Profile & My Team row (colorful) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="VIP Repurchase Salary" value=" " icon="📍" actionHref="/income/vip-repurchase-salary" />
-          <StatCard title="MY PROFILE" value=" " icon="👤" actionHref="/profile" />
-          <StatCard title="MY INCOME" value=" " icon="₹" actionHref="/income" />
-          <StatCard title="MY TEAM" value={TotalTeam} icon="👥" actionHref="/team" />
+          <StatCard title="VIP Repurchase Salary" value=" " icon="📍" actionHref="/income/vip-repurchase-salary" gradient={G.amber} />
+          <StatCard title="MY PROFILE" value=" " icon="👤" actionHref="/profile" gradient={G.sky} />
+          <StatCard title="MY INCOME" value=" " icon="₹" actionHref="/income" gradient={G.rose} />
+          <StatCard title="MY TEAM" value={TotalTeam} icon="👥" actionHref="/team" gradient={G.lime} />
         </div>
 
         {/* Accounts/Team counters */}
         <div className="rounded-lg shadow-sm ring-1 ring-slate-100 overflow-hidden">
-          <div className={`${G.emeraldBar} px-4 py-3 text-white text-center font-semibold`}>
-            <span className="opacity-90">“ Team Counters ”</span>
+          <div className={`${G.barEmerald} px-4 py-3 text-white text-center font-semibold`}>
+            <span className="opacity-95">“ Team Counters ”</span>
           </div>
           <div className="grid gap-4 p-4 md:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white">
@@ -241,18 +259,16 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Purchases (Your own) */}
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
-            Recent Purchases
-          </div>
+        <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">
+          <div className={`${G.barTeal} px-4 py-3 text-white font-semibold`}>Recent Purchases</div>
           <div className="p-4">
             {!(recent_sells && recent_sells.length) ? (
               <div className="text-slate-600 text-sm">No orders yet.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-slate-500 border-b">
+                  <thead className="bg-slate-50">
+                    <tr className="text-left text-slate-600 border-b">
                       <th className="py-2 pr-4">#ID</th>
                       <th className="py-2 pr-4">Product</th>
                       <th className="py-2 pr-4">Type</th>
@@ -280,8 +296,8 @@ export default function Dashboard() {
         </div>
 
         {/* Team Purchases (any leg) */}
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
+        <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">
+          <div className={`${G.barOrange} px-4 py-3 text-white font-semibold`}>
             Team Purchases (Your Left/Right)
           </div>
           <div className="p-4">
@@ -290,8 +306,8 @@ export default function Dashboard() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-slate-500 border-b">
+                  <thead className="bg-slate-50">
+                    <tr className="text-left text-slate-600 border-b">
                       <th className="py-2 pr-4">#ID</th>
                       <th className="py-2 pr-4">Buyer</th>
                       <th className="py-2 pr-4">Leg</th>
@@ -329,8 +345,8 @@ export default function Dashboard() {
         {/* Split tables: Left / Right */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Left Leg */}
-          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
+          <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">
+            <div className={`${G.barIndigo} px-4 py-3 text-white font-semibold`}>
               Left Leg Purchases {left_user ? `— ${left_user.name} (#${left_user.id})` : ""}
             </div>
             <div className="p-4">
@@ -339,8 +355,8 @@ export default function Dashboard() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-slate-500 border-b">
+                    <thead className="bg-slate-50">
+                      <tr className="text-left text-slate-600 border-b">
                         <th className="py-2 pr-4">#ID</th>
                         <th className="py-2 pr-4">Buyer</th>
                         <th className="py-2 pr-4">Product</th>
@@ -370,8 +386,8 @@ export default function Dashboard() {
           </div>
 
           {/* Right Leg */}
-          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
+          <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">
+            <div className={`${G.barTeal} px-4 py-3 text-white font-semibold`}>
               Right Leg Purchases {right_user ? `— ${right_user.name} (#${right_user.id})` : ""}
             </div>
             <div className="p-4">
@@ -380,8 +396,8 @@ export default function Dashboard() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-slate-500 border-b">
+                    <thead className="bg-slate-50">
+                      <tr className="text-left text-slate-600 border-b">
                         <th className="py-2 pr-4">#ID</th>
                         <th className="py-2 pr-4">Buyer</th>
                         <th className="py-2 pr-4">Product</th>
@@ -411,8 +427,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Bottom banner (green) */}
-        <div className={`${G.emeraldBar} rounded-lg py-8 text-center text-white shadow-md`}>
+        {/* Bottom banner (colored) */}
+        <div className={`${G.barEmerald} rounded-lg py-8 text-center text-white shadow-md`}>
           <div className="text-2xl font-bold">“ News ”</div>
         </div>
       </div>
