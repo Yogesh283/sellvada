@@ -173,36 +173,40 @@ class RegisteredUserController extends Controller
     }
 
     /**
-     * BFS spillover inside a branch (start is the branch root user_id).
+     * EXTREME spillover inside a branch:
+     * Go ONLY along the chosen side (L/R) down to the deepest available slot.
      * Returns [parent_id, side] where side is 'L' or 'R'.
-     * Treats 0/NULL as empty.
      */
     private function findSpilloverSlot(int $branchRootUserId, string $preferredSide = 'L'): ?array
     {
-        $preferredSide = ($preferredSide === 'R') ? 'R' : 'L';
-        $queue = [$branchRootUserId];
+        $side = ($preferredSide === 'R') ? 'R' : 'L';
+        $currentId = $branchRootUserId;
 
-        while ($queue) {
-            $batch = array_splice($queue, 0, 100);
-            $nodes = User::select('id', 'left_user_id', 'right_user_id')
-                ->whereIn('id', $batch)
-                ->get();
+        while (true) {
+            $n = User::select('id', 'left_user_id', 'right_user_id')
+                ->where('id', $currentId)
+                ->first();
 
-            foreach ($nodes as $n) {
-                // try preferred side first
-                if ($preferredSide === 'L') {
-                    if ($this->isSlotEmpty($n->left_user_id))  return [$n->id, 'L'];
-                    if ($this->isSlotEmpty($n->right_user_id)) return [$n->id, 'R'];
-                } else {
-                    if ($this->isSlotEmpty($n->right_user_id)) return [$n->id, 'R'];
-                    if ($this->isSlotEmpty($n->left_user_id))  return [$n->id, 'L'];
-                }
-
-                if (!is_null($n->left_user_id)  && (int)$n->left_user_id  !== 0) $queue[] = (int)$n->left_user_id;
-                if (!is_null($n->right_user_id) && (int)$n->right_user_id !== 0) $queue[] = (int)$n->right_user_id;
+            if (!$n) {
+                return null; // broken branch
             }
-        }
 
-        return null;
+            $col = $side === 'L' ? 'left_user_id' : 'right_user_id';
+
+            // place here if preferred side is empty
+            if ($this->isSlotEmpty($n->$col)) {
+                return [$n->id, $side];
+            }
+
+            // otherwise keep going down the same side
+            $nextId = (int) $n->$col;
+
+            // safety: if somehow 0 slips through
+            if ($nextId === 0) {
+                return [$n->id, $side];
+            }
+
+            $currentId = $nextId;
+        }
     }
 }

@@ -22,6 +22,8 @@ use App\Http\Controllers\BinarySummaryController;
   use App\Http\Controllers\DepositController;
   use App\Http\Controllers\AddressController;
   use App\Http\Controllers\WithdrawalController;
+  use App\Http\Controllers\TeamTreeController;
+
 
 
 
@@ -136,5 +138,102 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/income/binary', [BinarySummaryController::class, 'show'])
         ->name('income.binary');
 });
+
+
+
+
+Route::middleware(['auth','verified'])->group(function () {
+    // /team/tree?type=placement   (default)
+    // /team/tree/{root}?type=placement|referral
+    Route::get('/team/tree/{root?}', [TeamTreeController::class, 'show'])
+        ->whereNumber('root')
+        ->name('team.tree');
+});
+
+use App\Models\User; // 👈 Laravel 8+
+
+
+Route::get('/payout-list', function () {
+    // Amounts
+    $AMT = ['silver' => 3000, 'gold' => 18000, 'diamond' => 4800];
+
+    // Allowed sets based on self plan
+    $ALLOWED = [
+        'silver'  => ['silver'],
+        'gold'    => ['silver','gold'],
+        'diamond' => ['silver','gold','diamond'],
+    ];
+
+    // 1) All users with left/right ids
+    $users = User::select('id','left_user_id','right_user_id')->get();
+
+    // 2) Collect all ids for which we need highest plan (self + left + right)
+    $relatedIds = $users->flatMap(fn($u) => [$u->id, $u->left_user_id, $u->right_user_id])
+                        ->filter()->unique()->values();
+
+    // 3) Highest plan per buyer (lifetime) from sell.buyer_id (paid only)
+    $orderExpr = "CASE LOWER(type)
+                    WHEN 'silver' THEN 1
+                    WHEN 'gold' THEN 2
+                    WHEN 'diamond' THEN 3
+                    ELSE 0 END";
+
+    $levels = DB::table('sell')
+        ->select('buyer_id', DB::raw("MAX($orderExpr) AS lvl"))
+        ->where('status','paid')
+        ->whereIn(DB::raw('LOWER(type)'), ['silver','gold','diamond'])
+        ->whereIn('buyer_id', $relatedIds)
+        ->groupBy('buyer_id')
+        ->pluck('lvl','buyer_id');  // [buyer_id => 1|2|3]
+
+    // helpers
+    $planOf = function ($id) use ($levels) {
+        $lvl = (int)($levels[$id] ?? 0);
+        return $lvl >= 3 ? 'diamond' : ($lvl == 2 ? 'gold' : ($lvl == 1 ? 'silver' : null));
+    };
+    $minAmount = function ($a, $b, $c) use ($AMT) {
+        return min($AMT[$a] ?? PHP_FLOAT_MAX, $AMT[$b] ?? PHP_FLOAT_MAX, $AMT[$c] ?? PHP_FLOAT_MAX);
+    };
+
+    // 4) foreach users → rule apply → payout row (only 1 pair paid, smallest package)
+    $out = [];
+
+    foreach ($users as $u) {
+        $selfPlan  = $planOf($u->id);
+        $leftId    = $u->left_user_id;
+        $rightId   = $u->right_user_id;
+        $leftPlan  = $leftId  ? $planOf($leftId)  : null;
+        $rightPlan = $rightId ? $planOf($rightId) : null;
+
+        // qualify only if all three plans are known and left/right fit allowed set
+        if (!$selfPlan || !$leftPlan || !$rightPlan) {
+            continue;
+        }
+
+        $allowedSet = $ALLOWED[$selfPlan];
+
+        if (in_array($leftPlan, $allowedSet, true) && in_array($rightPlan, $allowedSet, true)) {
+            // ✅ pay only 1 pair, amount = smallest package among self/left/right
+            $payout = $minAmount($selfPlan, $leftPlan, $rightPlan);
+
+            $out[] = [
+                'sponsor_id' => $u->id,
+                'self_plan'  => $selfPlan,
+                'left_id'    => $leftId,
+                'left_plan'  => $leftPlan,
+                'right_id'   => $rightId,
+                'right_plan' => $rightPlan,
+                'pairs_matched' => 1,          // up to 10 count ignore; pay only 1
+                'payout'     => $payout,       // smallest package amount
+                'note'       => 'paid for 1 pair at smallest package',
+            ];
+        }
+    }
+
+    return response()->json($out);
+});
+
+
+
 
 require __DIR__.'/auth.php';

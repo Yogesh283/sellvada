@@ -188,6 +188,14 @@ export default function Dashboard() {
               >
                 My Team
               </a>
+              {/* New Tree button (next to My Team) */}
+              <a
+                href="/team/tree"
+                className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700"
+                title="View Team Tree"
+              >
+                Tree
+              </a>
             </div>
           </div>
         </div>
