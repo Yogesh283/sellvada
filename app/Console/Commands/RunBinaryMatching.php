@@ -19,7 +19,7 @@ class RunBinaryMatching extends Command
     // amount per package (single pair)
     private array $planAmount = ['silver' => 3000.00, 'gold' => 18000.00, 'diamond' => 48000.00];
 
-    // >>> ADDED: capping per closing and per day <<<
+    // capping
     private array $capPerClosing = ['silver'=>3000.00, 'gold'=>18000.00, 'diamond'=>48000.00];
     private array $capPerDay     = ['silver'=>6000.00, 'gold'=>36000.00, 'diamond'=>96000.00];
 
@@ -40,14 +40,12 @@ class RunBinaryMatching extends Command
             $day = $now->copy()->startOfDay();
         }
 
-        // build window for selected closing
         [$start, $end] = $this->makeWindow($day, $closing);
         $this->info("Now(IST): {$now->toDateTimeString()} | Window: {$start->toDateTimeString()} → {$end->toDateTimeString()}");
 
-        // ===== smart fallback: same closing-window में data वाले latest दिन पर shift करो =====
+        // smart fallback to latest date that has rows in same closing window
         if (!$this->option('date')) {
-            $rowsInWindow = $this->countRowsInWindow($start, $end);
-            if ($rowsInWindow === 0) {
+            if ($this->countRowsInWindow($start, $end) === 0) {
                 $latestDay = $this->findLatestDateForClosingWindow($closing);
                 if ($latestDay) {
                     [$start, $end] = $this->makeWindow($latestDay, $closing);
@@ -56,10 +54,9 @@ class RunBinaryMatching extends Command
             }
         }
 
-        $paidRows = $this->countRowsInWindow($start, $end);
-        $this->info("Paid rows in final window: {$paidRows}");
+        $this->info("Paid rows in final window: ".$this->countRowsInWindow($start, $end));
 
-        // ===== sponsors in this (final) window =====
+        // sponsors in this (final) window
         $sponsorIds = DB::table($this->sellTable)
             ->whereIn(DB::raw('LOWER(type)'), ['silver','gold','diamond'])
             ->where('status', 'paid')
@@ -75,8 +72,8 @@ class RunBinaryMatching extends Command
         foreach ($sponsorIds as $sidRaw) {
             $sid = (int) $sidRaw;
 
-            // 1) self qualification (highest self purchase ≤ window end)
-            $selfLvl  = $this->getSelfLevel($sid, $end);      // 0/1/2/3
+            // 1) Self qualification
+            $selfLvl  = $this->getSelfLevel($sid, $end); // 0/1/2/3
             $selfPlan = $this->lvlToPlan($selfLvl);
             if (!$selfPlan) {
                 $this->recordNoPay($sid, 'none', $start, $closing);
@@ -84,7 +81,7 @@ class RunBinaryMatching extends Command
                 continue;
             }
 
-            // 2) highest package on L/R in this window
+            // 2) Highest plan on L/R in this window
             $lr = DB::table($this->sellTable)
                 ->selectRaw("
                     UPPER(leg) as leg,
@@ -113,48 +110,58 @@ class RunBinaryMatching extends Command
                 continue;
             }
 
-            // 3) allowed check by self plan
-            $allowed = [
-                'silver'  => ['silver'],
-                'gold'    => ['silver','gold'],
-                'diamond' => ['silver','gold','diamond'],
-            ];
-            $ok = in_array($leftPlan,  $allowed[$selfPlan], true)
-               && in_array($rightPlan, $allowed[$selfPlan], true);
+            // 3) Allowed + payout
+            $payable = 0.0;
+            $reason  = '';
 
-            if (!$ok) {
-                $this->recordNoPay($sid, $selfPlan, $start, $closing);
-                $this->line("NOT ALLOWED → SPONSOR={$sid} SELF={$selfPlan} L={$leftPlan} R={$rightPlan}");
-                continue;
+            if ($selfPlan === 'silver') {
+                if ($leftLvl === 1 && $rightLvl === 1) {
+                    $payable = $this->planAmount['silver'];
+                    $reason  = 'silver_pair_only';
+                } else {
+                    $this->recordNoPay($sid, $selfPlan, $start, $closing);
+                    $this->line("NOT ALLOWED (SILVER needs S/S) → SPONSOR={$sid} L={$leftPlan} R={$rightPlan}");
+                    continue;
+                }
+            } elseif ($selfPlan === 'gold') {
+                if ($leftLvl === 3 || $rightLvl === 3) {
+                    $this->recordNoPay($sid, $selfPlan, $start, $closing);
+                    $this->line("NOT ALLOWED (GOLD with DIAMOND leg) → SPONSOR={$sid} L={$leftPlan} R={$rightPlan}");
+                    continue;
+                }
+                if ($leftLvl === 2 && $rightLvl === 2) {
+                    $payable = $this->planAmount['gold'];
+                    $reason  = 'both_gold';
+                } elseif ($leftLvl >= 1 && $rightLvl >= 1) {
+                    $payable = $this->planAmount['silver'];
+                    $reason  = 'fallback_silver_pair_on_gold_self';
+                } else {
+                    $this->recordNoPay($sid, $selfPlan, $start, $closing);
+                    $this->line("NO MATCH (GOLD) → SPONSOR={$sid} L={$leftPlan} R={$rightPlan}");
+                    continue;
+                }
+            } else { // diamond
+                if ($leftLvl === 3 && $rightLvl === 3) {
+                    $payable = $this->planAmount['diamond'];
+                    $reason  = 'both_diamond';
+                } elseif ($leftLvl >= 2 && $rightLvl >= 2) {
+                    $payable = $this->planAmount['gold'];
+                    $reason  = 'both_at_least_gold';
+                } elseif ($leftLvl >= 1 && $rightLvl >= 1) {
+                    $payable = $this->planAmount['silver'];
+                    $reason  = 'both_at_least_silver';
+                } else {
+                    $this->recordNoPay($sid, $selfPlan, $start, $closing);
+                    $this->line("NO MATCH (DIAMOND) → SPONSOR={$sid} L={$leftPlan} R={$rightPlan}");
+                    continue;
+                }
             }
 
-            // 4) payout (single pair; no capping yet)
-            $reason  = 'smallest_package_one_pair';
-            if ($selfPlan==='gold' && $leftPlan==='gold' && $rightPlan==='gold') {
-                $payable = $this->planAmount['gold'];
-                $reason  = 'all_gold';
-            } elseif ($selfPlan==='diamond' && $leftPlan==='diamond' && $rightPlan==='diamond') {
-                $payable = $this->planAmount['diamond'];
-                $reason  = 'all_diamond';
-            } else {
-                $minLvl  = min($selfLvl, $leftLvl, $rightLvl);
-                $minPlan = $this->lvlToPlan($minLvl);
-                $payable = $minPlan ? (float)$this->planAmount[$minPlan] : 0.0;
-            }
+            // 4) Caps (per closing + per day)
+            $capClose = $this->capPerClosing[$selfPlan] ?? 0.0;
+            $capDay   = $this->capPerDay[$selfPlan]     ?? 0.0;
+            $method   = 'closing_'.$closing;
 
-            if ($payable <= 0) {
-                $this->recordNoPay($sid, $selfPlan, $start, $closing);
-                $this->line("NO PAY → SPONSOR={$sid} SELF={$selfPlan} L={$leftPlan} R={$rightPlan}");
-                continue;
-            }
-
-            // >>> ADDED: CAP CONDITION (per closing + per day) <<<
-            $capClose = $this->capPerClosing[$selfPlan] ?? 0.0;  // per-closing cap
-            $capDay   = $this->capPerDay[$selfPlan]     ?? 0.0;  // per-day cap
-
-            $method = 'closing_'.$closing;
-
-            // paid already in THIS closing (same date)
             $paidInThisClosing = (float) DB::table('_payout')
                 ->where('user_id', $sid)
                 ->where('type', 'binary_matching')
@@ -162,30 +169,25 @@ class RunBinaryMatching extends Command
                 ->whereDate('created_at', $start->toDateString())
                 ->sum('amount');
 
-            // paid already TODAY (both closings)
             $paidInDay = (float) DB::table('_payout')
                 ->where('user_id', $sid)
                 ->where('type', 'binary_matching')
                 ->whereDate('created_at', $start->toDateString())
                 ->sum('amount');
 
-            // remaining headroom
             $remainClosing = max(0.0, $capClose - $paidInThisClosing);
             $remainDay     = max(0.0, $capDay   - $paidInDay);
             $headroom      = min($remainClosing, $remainDay);
 
-            // apply cap
             $payable = min($payable, $headroom);
 
-            // if cap exhausted -> no pay this closing
             if ($payable <= 0) {
                 $this->recordNoPay($sid, $selfPlan, $start, $closing);
                 $this->line("CAPPED OUT → SPONSOR={$sid} SELF={$selfPlan} CLOSE={$closing} DATE={$start->toDateString()}");
                 continue;
             }
-            // <<< END CAP CONDITION >>>
 
-            // weaker leg (lower level; tie→L) → pick latest buyer there for ledger
+            // 5) Ledger reference (weaker leg; tie→L)
             $minSide = ($leftLvl <= $rightLvl) ? 'L' : 'R';
             $triggerBuyerId = DB::table($this->sellTable)
                 ->where('sponsor_id', $sid)
@@ -203,7 +205,7 @@ class RunBinaryMatching extends Command
                     ['volume_left'=>0,'volume_right'=>0,'matched'=>0,'payout'=>$payable,'updated_at'=>now(),'created_at'=>now()]
                 );
 
-                // ledger (guard duplicate)
+                // one entry per user+day+closing
                 $exists = DB::table('_payout')
                     ->where('user_id', $sid)
                     ->where('type', 'binary_matching')
@@ -212,11 +214,13 @@ class RunBinaryMatching extends Command
                     ->exists();
 
                 if (!$exists) {
+                    // GROSS (100%) goes in payout table
+                    $gross = number_format($payable, 2, '.', '');
                     DB::table('_payout')->insert([
                         'user_id'      => $sid,
                         'to_user_id'   => $sid,
                         'from_user_id' => $triggerBuyerId,
-                        'amount'       => $payable,
+                        'amount'       => $gross,              // ✅ full amount (for reporting)
                         'status'       => 'pending',
                         'method'       => $method,
                         'type'         => 'binary_matching',
@@ -224,24 +228,33 @@ class RunBinaryMatching extends Command
                         'updated_at'   => now(),
                     ]);
 
-                    // wallet credit
-                    $inc = number_format($payable, 2, '.', '');
-                    $affected = DB::update("UPDATE wallet SET amount = amount + ? WHERE user_id = ?", [$inc, $sid]);
+                    // NET credit to wallet = 80% of gross (20% deduction)
+                    $net       = number_format($payable * 0.80, 2, '.', '');           // ✅ only this gets credited
+                    $deduction = number_format($payable - (float)$net, 2, '.', '');    // (optional info)
+
+                    // credit wallet with NET only
+                    $affected = DB::update("UPDATE wallet SET amount = amount + ? WHERE user_id = ?", [$net, $sid]);
                     if ($affected === 0) {
                         DB::table('wallet')->insert([
                             'user_id'    => $sid,
-                            'amount'     => $inc,
+                            'amount'     => $net,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
                     }
+
+                    // (Optional) अगर deduction को track करना हो तो किसी meta/ledger में रखें:
+                    // DB::table('_payout_meta')->insert([
+                    //   'user_id'=>$sid,'payout_type'=>'binary_matching','closing'=>$method,
+                    //   'key'=>'deduction_20_percent','value'=>$deduction,'created_at'=>now(),'updated_at'=>now()
+                    // ]);
                 }
 
                 DB::commit();
                 $this->info(sprintf(
-                    'PAID → SPONSOR=%d SELF=%s L=%s R=%s CLOSE=%d DATE=%s PAYABLE=%.2f (%s) FROM=%s',
+                    'PAID → SPONSOR=%d SELF=%s L=%s R=%s CLOSE=%d DATE=%s GROSS=%.2f (NET=%.2f) %s FROM=%s',
                     $sid, strtoupper($selfPlan), $leftPlan, $rightPlan,
-                    $closing, $start->toDateString(), $payable, $reason, $triggerBuyerId ?? 'null'
+                    $closing, $start->toDateString(), $payable, $payable * 0.80, $reason, $triggerBuyerId ?? 'null'
                 ));
             } catch (\Throwable $e) {
                 DB::rollBack();
@@ -255,7 +268,6 @@ class RunBinaryMatching extends Command
         return self::SUCCESS;
     }
 
-    /** Build window for a given day+closing (IST). */
     private function makeWindow(Carbon $day, int $closing): array
     {
         if ($closing === 1) {
@@ -264,7 +276,6 @@ class RunBinaryMatching extends Command
         return [$day->copy()->setTime(12, 0, 0), $day->copy()->setTime(17, 59, 59)];
     }
 
-    /** Count rows in window for quick debug. */
     private function countRowsInWindow(Carbon $start, Carbon $end): int
     {
         return DB::table($this->sellTable)
@@ -273,14 +284,10 @@ class RunBinaryMatching extends Command
             ->count();
     }
 
-    /** Find latest DATE that actually has rows inside the selected closing window. */
     private function findLatestDateForClosingWindow(int $closing): ?Carbon
     {
-        [$from, $to] = $closing === 1
-            ? ['06:00:00','11:59:59']
-            : ['12:00:00','17:59:59'];
+        [$from, $to] = $closing === 1 ? ['06:00:00','11:59:59'] : ['12:00:00','17:59:59'];
 
-        // latest date where TIME(created_at) is inside the closing window
         $latest = DB::table($this->sellTable)
             ->where('status', 'paid')
             ->whereRaw("TIME(created_at) BETWEEN ? AND ?", [$from, $to])
@@ -289,7 +296,6 @@ class RunBinaryMatching extends Command
         return $latest ? Carbon::parse($latest, 'Asia/Kolkata')->startOfDay() : null;
     }
 
-    /** Highest self purchase level by $asOf (0=none,1=silver,2=gold,3=diamond). */
     private function getSelfLevel(int $sponsorId, Carbon $asOf): int
     {
         $types = DB::table($this->sellTable)
@@ -309,7 +315,6 @@ class RunBinaryMatching extends Command
         return $level;
     }
 
-    /** Zero-payout row for visibility. */
     private function recordNoPay(int $sid, string $plan, Carbon $dayStart, int $closing): void
     {
         DB::table('binary_payouts')->updateOrInsert(
@@ -318,7 +323,6 @@ class RunBinaryMatching extends Command
         );
     }
 
-    /** Map level → plan. */
     private function lvlToPlan(int $lvl): ?string
     {
         return $lvl >= 3 ? 'diamond' : ($lvl === 2 ? 'gold' : ($lvl === 1 ? 'silver' : null));

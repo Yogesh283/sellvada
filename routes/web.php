@@ -23,6 +23,7 @@ use App\Http\Controllers\BinarySummaryController;
   use App\Http\Controllers\AddressController;
   use App\Http\Controllers\WithdrawalController;
   use App\Http\Controllers\TeamTreeController;
+  use App\Http\Controllers\RepurchaseController;
 
 
 
@@ -143,12 +144,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 
 Route::middleware(['auth','verified'])->group(function () {
-    // /team/tree?type=placement   (default)
-    // /team/tree/{root}?type=placement|referral
     Route::get('/team/tree/{root?}', [TeamTreeController::class, 'show'])
         ->whereNumber('root')
         ->name('team.tree');
 });
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/repurchase', [RepurchaseController::class, 'index'])
+        ->name('repurchase.index');
+
+    Route::post('/repurchase/checkout', [RepurchaseController::class, 'checkout'])
+        ->name('repurchase.checkout');
+});
+
 
 use App\Models\User; // 👈 Laravel 8+
 

@@ -11,9 +11,10 @@ use Inertia\Response;
 class BinarySummaryController extends Controller
 {
     /**
-     * ALL-LEVEL team business (Left/Right) grouped by rank (type) using CTE.
+     * All-level team business grouped by rank (Silver/Gold/Diamond/Other),
+     * per-leg (L/R) Orders + Amount, Matched (pair) amount and Carry Forward.
      * Tree rule: child.refer_by = parent.referral_id
-     * Leg comes from users.position (L/R), not sell.leg
+     * Leg comes from users.position (L/R)
      * Filters: ?from=YYYY-MM-DD&to=YYYY-MM-DD
      * View: Income/Binary
      */
@@ -22,127 +23,157 @@ class BinarySummaryController extends Controller
         $userId = (int) Auth::id();
         abort_unless($userId, 401);
 
-        $from = $request->query('from'); // YYYY-MM-DD
-        $to   = $request->query('to');   // YYYY-MM-DD
+        $from = $request->query('from');
+        $to   = $request->query('to');
 
         // Team root = my referral code
         $myReferral = (string) DB::table('users')->where('id', $userId)->value('referral_id');
 
-        // Empty safe response
-        $emptyMatrix = [
-            'silver'  => ['left'=>0,'right'=>0,'orders_left'=>0,'orders_right'=>0],
-            'gold'    => ['left'=>0,'right'=>0,'orders_left'=>0,'orders_right'=>0],
-            'diamond' => ['left'=>0,'right'=>0,'orders_left'=>0,'orders_right'=>0],
-            'other'   => ['left'=>0,'right'=>0,'orders_left'=>0,'orders_right'=>0],
+        // skeleton row
+        $emptyRow = ['left'=>0,'right'=>0,'orders_left'=>0,'orders_right'=>0,'matched'=>0,'pairs'=>0,'cf_left'=>0,'cf_right'=>0];
+        $matrix = [
+            'silver'  => $emptyRow,
+            'gold'    => $emptyRow,
+            'diamond' => $emptyRow,
+            'other'   => $emptyRow,
         ];
 
         if (!$myReferral) {
             return Inertia::render('Income/Binary', [
-                'asOf'    => now()->toDateTimeString(),
-                'filters' => ['from'=>$from, 'to'=>$to],
-                'totals'  => ['left'=>0, 'right'=>0],
-                'matrix'  => $emptyMatrix,
-                'recent'  => [],
+                'asOf'        => now()->toDateTimeString(),
+                'filters'     => ['from'=>$from,'to'=>$to],
+                'totals'      => ['left'=>0,'right'=>0],
+                'matrix'      => $matrix,
+                'recent'      => [],
+                'carryTotals' => ['left'=>0,'right'=>0,'total'=>0],
             ]);
         }
 
-        // Date clause + bindings
-        $dateSql  = '';
-        $bindings = [$myReferral];
-        if ($from) { $dateSql .= ' AND DATE(s.created_at) >= ?'; $bindings[] = $from; }
-        if ($to)   { $dateSql .= ' AND DATE(s.created_at) <= ?'; $bindings[] = $to; }
+        // Date filters for SQL
+        $dateSql = '';
+        $bind    = [$myReferral];
+        if ($from) { $dateSql .= " AND DATE(s.created_at) >= ?"; $bind[] = $from; }
+        if ($to)   { $dateSql .= " AND DATE(s.created_at) <= ?"; $bind[] = $to; }
 
-        /** ---------- 1) Rank + Left/Right grouped (matrix) ---------- */
-      $rowsSql = "
+        // ===== Rank/Leg aggregation (Orders + Amount) =====
+        $rowsSql = "
 WITH RECURSIVE team AS (
-    SELECT id, referral_id, refer_by, position, 1 AS lvl
-    FROM users
-    WHERE refer_by = ?
+  SELECT id, referral_id, refer_by, position, 1 AS lvl
+  FROM users
+  WHERE refer_by = ?
 
-    UNION ALL
-    SELECT u.id, u.referral_id, u.refer_by, u.position, t.lvl + 1
-    FROM users u
-    INNER JOIN team t ON u.refer_by = t.referral_id
+  UNION ALL
+  SELECT u.id, u.referral_id, u.refer_by, u.position, t.lvl + 1
+  FROM users u
+  JOIN team t ON u.refer_by = t.referral_id
 )
-SELECT 
-    x.type,
-    x.leg,
-    SUM(x.amount)  AS amount,
-    COUNT(*)       AS orders
+SELECT
+  x.type,
+  x.leg,
+  SUM(x.amount) AS amount,
+  COUNT(*)      AS orders
 FROM (
-    SELECT
-        LOWER(COALESCE(NULLIF(s.type,''),'other')) AS type,
-        UPPER(COALESCE(u.position,'NA'))          AS leg,
-        s.amount
-    FROM team u
-    INNER JOIN sell s ON s.buyer_id = u.id
-    WHERE s.status = 'paid' {$dateSql}
-) AS x
+  SELECT
+    LOWER(COALESCE(NULLIF(s.type,''),'other')) AS type,
+    UPPER(COALESCE(u.position,'NA'))          AS leg,
+    s.amount
+  FROM team u
+  JOIN sell s ON s.buyer_id = u.id
+  WHERE s.status = 'paid' {$dateSql}
+) x
 GROUP BY x.type, x.leg
 ";
-$rows = DB::select($rowsSql, $bindings);
+        $rows = DB::select($rowsSql, $bind);
 
-
-        // Build matrix expected by React
-        $matrix = $emptyMatrix;
         foreach ($rows as $r) {
-            $type = $r->type ?? 'other';
-            if ($r->leg === 'L') {
-                $matrix[$type]['left']        += (float) $r->amount;
-                $matrix[$type]['orders_left'] += (int) $r->orders;
-            } elseif ($r->leg === 'R') {
-                $matrix[$type]['right']        += (float) $r->amount;
-                $matrix[$type]['orders_right'] += (int) $r->orders;
+            $rank = $r->type ?? 'other';
+            $leg  = $r->leg;
+            if (!isset($matrix[$rank])) $matrix[$rank] = $emptyRow;
+
+            if ($leg === 'L') {
+                $matrix[$rank]['left']        += (float) $r->amount;
+                $matrix[$rank]['orders_left'] += (int) $r->orders;
+            } elseif ($leg === 'R') {
+                $matrix[$rank]['right']        += (float) $r->amount;
+                $matrix[$rank]['orders_right'] += (int) $r->orders;
             }
         }
 
-        // Totals
-        $leftTotal  = array_sum(array_map(fn($x) => $x['left'],  $matrix));
-        $rightTotal = array_sum(array_map(fn($x) => $x['right'], $matrix));
+        // ===== Matched (pair) amount + CF per rank =====
+        // unit BV per rank (orders assumed homogeneous inside a rank)
+        $unit = ['silver'=>3000.0, 'gold'=>15000.0, 'diamond'=>30000.0];
 
-        /** ---------- 2) Recent 20 orders (with leg from users.position) ---------- */
+        $cfLTotal = 0.0; $cfRTotal = 0.0;
+
+        foreach ($matrix as $rank => &$row) {
+            $leftAmt  = (float)($row['left']  ?? 0);
+            $rightAmt = (float)($row['right'] ?? 0);
+
+            // Matched amount = amount utilised in pairs
+            $matchedAmt = min($leftAmt, $rightAmt);
+            $row['matched'] = $matchedAmt;
+
+            // Pairs count (best-effort): by unit BV if known, else by min order count
+            if (isset($unit[$rank]) && $unit[$rank] > 0) {
+                $row['pairs'] = (int) floor($matchedAmt / $unit[$rank]);
+            } else {
+                $row['pairs'] = min((int)($row['orders_left'] ?? 0), (int)($row['orders_right'] ?? 0));
+            }
+
+            // Carry forward (unmatched extra)
+            $row['cf_left']  = max(0.0, $leftAmt  - $matchedAmt);
+            $row['cf_right'] = max(0.0, $rightAmt - $matchedAmt);
+
+            $cfLTotal += $row['cf_left'];
+            $cfRTotal += $row['cf_right'];
+        }
+        unset($row);
+
+        // Top cards stay: total left/right business
+        $leftTotal  = array_sum(array_column($matrix, 'left'));
+        $rightTotal = array_sum(array_column($matrix, 'right'));
+
+        // ===== Recent 20 paid orders (context) =====
         $recentSql = "
-            WITH RECURSIVE team AS (
-                SELECT id, referral_id, refer_by, position, 1 AS lvl
-                FROM users
-                WHERE refer_by = ?
+WITH RECURSIVE team AS (
+  SELECT id, referral_id, refer_by, position, 1 AS lvl
+  FROM users
+  WHERE refer_by = ?
 
-                UNION ALL
-                SELECT u.id, u.referral_id, u.refer_by, u.position, t.lvl + 1
-                FROM users u
-                INNER JOIN team t ON u.refer_by = t.referral_id
-            )
-            SELECT
-                s.buyer_id,
-                s.product,
-                LOWER(COALESCE(NULLIF(s.type,''),'other')) AS type,
-                UPPER(COALESCE(u.position,'NA'))          AS leg,
-                s.amount,
-                s.created_at
-            FROM team u
-            INNER JOIN sell s ON s.buyer_id = u.id
-            WHERE s.status = 'paid' {$dateSql}
-            ORDER BY s.id DESC
-            LIMIT 20
-        ";
-
-        $recent = collect(DB::select($recentSql, $bindings))->map(function ($r) {
-            return [
-                'buyer_id'   => $r->buyer_id,
-                'product'    => $r->product,
-                'type'       => $r->type,
-                'leg'        => $r->leg,
-                'amount'     => (float) $r->amount,
-                'created_at' => (string) $r->created_at,
-            ];
-        });
+  UNION ALL
+  SELECT u.id, u.referral_id, u.refer_by, u.position, t.lvl + 1
+  FROM users u
+  JOIN team t ON u.refer_by = t.referral_id
+)
+SELECT
+  s.buyer_id,
+  s.product,
+  LOWER(COALESCE(NULLIF(s.type,''),'other')) AS type,
+  UPPER(COALESCE(u.position,'NA'))          AS leg,
+  s.amount,
+  s.created_at
+FROM team u
+JOIN sell s ON s.buyer_id = u.id
+WHERE s.status='paid' {$dateSql}
+ORDER BY s.id DESC
+LIMIT 20
+";
+        $recent = collect(DB::select($recentSql, $bind))->map(fn($r) => [
+            'buyer_id'   => $r->buyer_id,
+            'product'    => $r->product,
+            'type'       => $r->type,
+            'leg'        => $r->leg,
+            'amount'     => (float) $r->amount,
+            'created_at' => (string) $r->created_at,
+        ]);
 
         return Inertia::render('Income/Binary', [
-            'asOf'    => now()->toDateTimeString(),
-            'filters' => ['from'=>$from, 'to'=>$to],
-            'totals'  => ['left'=>$leftTotal, 'right'=>$rightTotal],
-            'matrix'  => $matrix,
-            'recent'  => $recent,
+            'asOf'        => now()->toDateTimeString(),
+            'filters'     => ['from'=>$from, 'to'=>$to],
+            'totals'      => ['left'=>$leftTotal, 'right'=>$rightTotal],   // top cards
+            'matrix'      => $matrix,                                      // table rows
+            'recent'      => $recent,
+            'carryTotals' => ['left'=>$cfLTotal,'right'=>$cfRTotal,'total'=>$cfLTotal+$cfRTotal],
         ]);
     }
 }

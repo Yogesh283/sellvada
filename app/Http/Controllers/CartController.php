@@ -8,30 +8,39 @@ use Inertia\Inertia;
 
 class CartController extends Controller
 {
-    public function show(Request $request)
-    {
-        $uid = $request->user()->id;
+   // app/Http/Controllers/CartController.php
+public function show(Request $request)
+{
+    $uid = $request->user()->id;
 
-        // Wallet balance (robust even if amounts are stored as strings with commas)
-        $walletBalance = (float) DB::table('wallet')
-            ->where('user_id', $uid)
-            ->selectRaw("COALESCE(SUM(REPLACE(amount, ',', '') + 0), 0) AS bal")
-            ->value('bal');
+    $walletBalance = (float) DB::table('wallet')
+        ->where('user_id', $uid)
+        ->selectRaw("COALESCE(SUM(REPLACE(amount, ',', '') + 0), 0) AS bal")
+        ->value('bal');
 
-        // Default (or latest) shipping address for this user
-        $defaultAddress = DB::table('address')
-            ->where('user_id', $uid)
-            ->orderByDesc('is_default')   // prefer default
-            ->orderByDesc('id')           // else latest
-            ->select('id','name','phone','line1','line2','city','state','pincode','country','is_default')
-            ->first();
+    $defaultAddress = DB::table('address')
+        ->where('user_id', $uid)
+        ->orderByDesc('is_default')
+        ->orderByDesc('id')
+        ->select('id','name','phone','line1','line2','city','state','pincode','country','is_default')
+        ->first();
 
-        $addressCount = DB::table('address')->where('user_id', $uid)->count();
+    $addressCount = DB::table('address')->where('user_id', $uid)->count();
 
-        return Inertia::render('Card', [
-            'walletBalance'  => $walletBalance,
-            'defaultAddress' => $defaultAddress,   // 👈 React will show this
-            'addressCount'   => $addressCount,
-        ]);
-    }
+    // ⛔️ extras OFF
+    $charges = [
+        'shipping'    => 0,
+        'packaging'   => 0,
+        'convenience' => 0,
+        'gst_percent' => 0,
+    ];
+
+    return Inertia::render('Card', [
+        'walletBalance'  => $walletBalance,
+        'defaultAddress' => $defaultAddress,
+        'addressCount'   => $addressCount,
+        'charges'        => $charges, // frontend total इसी से 0 रहेगा
+    ]);
+}
+
 }

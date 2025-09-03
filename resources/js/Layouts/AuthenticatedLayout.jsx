@@ -12,6 +12,11 @@ export default function AuthenticatedLayout({ header, children }) {
 
   const is = (name) => (typeof route !== 'undefined' ? route().current(name) : false);
 
+  // Safe href for Repurchase page (named route or plain path)
+  const repurchaseHref = (() => {
+    try { return route('repurchase.index'); } catch { return '/repurchase'; }
+  })();
+
   return (
     <div className="min-h-screen bg-gray-50 text-black">
       {/* NAVBAR */}
@@ -31,9 +36,20 @@ export default function AuthenticatedLayout({ header, children }) {
                 <NavLink href={route('dashboard')} active={is('dashboard')} className="text-black">
                   Dashboard
                 </NavLink>
+
                 <NavLink href="/" active={is('home')} className="text-black">
                   Products
                 </NavLink>
+
+                {/* ✅ Repurchase (new) */}
+                <NavLink
+                  href={repurchaseHref}
+                  active={is('repurchase.index') || is('repurchase')}
+                  className="text-black"
+                >
+                  Repurchase
+                </NavLink>
+
                 <NavLink
                   href={route('wallet.deposit')}
                   active={is('wallet.deposit')}
@@ -72,7 +88,7 @@ export default function AuthenticatedLayout({ header, children }) {
                     </svg>
                   </button>
 
-                  {/* Desktop panel – same content as mobile */}
+                  {/* Desktop panel */}
                   {panelOpen && (
                     <div
                       className="absolute right-0 top-12 w-80 rounded-xl border border-gray-200 bg-white shadow-xl"
@@ -88,9 +104,25 @@ export default function AuthenticatedLayout({ header, children }) {
                         <DesktopMenuLink href={route('dashboard')} active={is('dashboard')} onClick={() => setPanelOpen(false)}>
                           Dashboard
                         </DesktopMenuLink>
+
                         <DesktopMenuLink href="/" active={is('home')} onClick={() => setPanelOpen(false)}>
                           Products
                         </DesktopMenuLink>
+
+                        {/* Cart link (if you use it) */}
+                        <DesktopMenuLink href="/card" active={is && is('card')} onClick={() => setPanelOpen(false)}>
+                          Cart
+                        </DesktopMenuLink>
+
+                        {/* ✅ Repurchase (new) */}
+                        <DesktopMenuLink
+                          href={repurchaseHref}
+                          active={is('repurchase.index') || is('repurchase')}
+                          onClick={() => setPanelOpen(false)}
+                        >
+                          Repurchase
+                        </DesktopMenuLink>
+
                         <DesktopMenuLink href={route('wallet.deposit')} active={is('wallet.deposit')} onClick={() => setPanelOpen(false)}>
                           Deposit
                         </DesktopMenuLink>
@@ -179,6 +211,12 @@ export default function AuthenticatedLayout({ header, children }) {
               <ResponsiveNavLink href="/" active={is('home')}>
                 Products
               </ResponsiveNavLink>
+
+              {/* ✅ Repurchase (new) */}
+              <ResponsiveNavLink href={repurchaseHref} active={is('repurchase.index') || is('repurchase')}>
+                Repurchase
+              </ResponsiveNavLink>
+
               <ResponsiveNavLink href={route('wallet.deposit')} active={is('wallet.deposit')}>
                 Deposit
               </ResponsiveNavLink>
@@ -222,8 +260,7 @@ export default function AuthenticatedLayout({ header, children }) {
 
 /* --- helpers for desktop panel links (same visual as ResponsiveNavLink) --- */
 function DesktopMenuLink({ href, active, children, onClick }) {
-  const base =
-    'block rounded-md px-3 py-2 text-sm font-medium transition';
+  const base = 'block rounded-md px-3 py-2 text-sm font-medium transition';
   const activeCls = 'bg-indigo-50 text-indigo-700';
   const idleCls = 'text-gray-700 hover:bg-gray-50';
   return (

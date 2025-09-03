@@ -6,11 +6,64 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import "swiper/css";
 
-/* ----------------- Product Catalog (ids, names, MRP, images, type) ----------------- */
+
 const CATALOG = {
-  superfruit: { id: 1, name: "Superfruit Mix (Silver)",  price: 3000,  img: "/image/1.png", variant: "350g Jar",  type: "silver"  },
-  immunity:   { id: 2, name: "Immunity Boost (Gold)",    price: 15000, img: "/image/1.png", variant: "200g Pack", type: "gold"    },
-  metabolism: { id: 3, name: "Metabolism Max (Diamond)", price: 30000, img: "/image/1.png", variant: "250g Pack", type: "diamond" },
+  superfruit: {
+    id: 1,
+    name: "Superfruit Mix (Silver)",
+    img: "/image/2.png",
+    variant: "30 Pic gummies(2 bottles)",
+    type: "silver",
+
+    bottles: 2,
+    gummiesPerBottle: 30,
+    unitPrice: 2000,
+    baseTotal: 2 * 2000,      // 4000
+    mrp: 3000,                // offer price
+    price: 3000,              // used by cart
+    discount: 4000 - 3000,    // 1000
+    discountPercent: 25,
+    totalGummies: 2 * 30,     // 60
+    pricePerGummy: 3000 / 60, // 50
+  },
+
+  immunity: {
+    id: 2,
+    name: "Immunity Boost (Gold)",
+    img: "/image/10.png",
+    variant: "30 Pic gummies(10 bottles)",
+    type: "gold",
+
+    bottles: 10,
+    gummiesPerBottle: 30,
+    unitPrice: 2000,
+    baseTotal: 10 * 2000,     // 20000
+    mrp: 15000,
+    price: 15000,
+    discount: 20000 - 15000,  // 5000
+    discountPercent: 25,
+    totalGummies: 10 * 30,    // 300
+    pricePerGummy: 15000 / 300,
+  },
+
+  metabolism: {
+    id: 3,
+    name: "Metabolism Max (Diamond)",
+    img: "/image/20.png",
+    variant: "30 Pic gummies(20 bottles)",
+    type: "diamond",
+
+    bottles: 20,
+    gummiesPerBottle: 30,
+    unitPrice: 2000,
+    baseTotal: 20 * 2000,     // 40000
+    mrp: 30000,
+    price: 30000,
+    discount: 40000 - 30000,  // 10000
+    discountPercent: 25,
+    totalGummies: 20 * 30,    // 600
+    pricePerGummy: 30000 / 600,
+  },
 };
 
 /* ----------------- Slider ----------------- */
@@ -100,7 +153,7 @@ function addToCart(product, goToCart = true) {
         qty: 1,
         img: product.img,
         variant: product.variant || null,
-        type: type,                   // ✅ type carry to Card & backend
+        type, // ✅ carry type to backend
       });
     }
     localStorage.setItem(CART_KEY, JSON.stringify(cart));
@@ -113,7 +166,7 @@ function addToCart(product, goToCart = true) {
 
 /* ----------------- Product Card ----------------- */
 function ProductCard({ product, bullets = [] }) {
-  const { img, name, price, variant, type } = product;
+  const { img, name, price, variant, type, baseTotal, discount, discountPercent } = product;
   return (
     <div className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition">
       <div className="relative overflow-hidden rounded-xl aspect-square bg-sky-50">
@@ -130,7 +183,11 @@ function ProductCard({ product, bullets = [] }) {
       <div className="mt-4">
         <h3 className="text-lg font-semibold text-slate-900">{name}</h3>
         {variant && <p className="mt-1 text-sm text-slate-600">{variant}</p>}
-        {type && <p className="text-xs text-slate-500">Type: <span className="uppercase">{type}</span></p>}
+        {type && (
+          <p className="text-xs text-slate-500">
+            Type: <span className="uppercase">{type}</span>
+          </p>
+        )}
         <ul className="mt-3 space-y-1 text-sm text-sky-700">
           {bullets.slice(0, 3).map((b, i) => (
             <li className="flex items-center gap-2" key={i}>
@@ -139,17 +196,21 @@ function ProductCard({ product, bullets = [] }) {
           ))}
         </ul>
         <div className="mt-4 flex items-center justify-between">
-          <div className="text-xl font-bold text-slate-900">₹{price}</div>
+          <div>
+            <div className="text-xs text-slate-500 line-through">₹{baseTotal.toLocaleString()}</div>
+            <div className="text-xl font-bold text-slate-900">₹{price.toLocaleString()}</div>
+            <div className="text-xs text-green-700 mt-0.5">
+              Save ₹{discount.toLocaleString()} ({discountPercent}%)
+            </div>
+          </div>
           <div className="flex gap-2">
-            {/* ✅ Real Add-to-Cart */}
             <button
               onClick={() => addToCart(product, true)}
               className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700"
               type="button"
             >
-             Buy Now
+              Buy Now
             </button>
-            {/* <LinkButton href="/buy" variant="outline">Buy Now</LinkButton> */}
           </div>
         </div>
       </div>
@@ -221,23 +282,32 @@ export default function Welcome() {
               </div>
 
               <div>
-                <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-3">{CATALOG.superfruit.name}</h3>
-                <p className="text-slate-600 mb-4">Type: <b className="uppercase">{CATALOG.superfruit.type}</b></p>
-                <div className="flex items-center gap-4">
+                <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-3">
+                  {CATALOG.superfruit.name}
+                </h3>
+                <p className="text-slate-600 mb-4">
+                  Type: <b className="uppercase">{CATALOG.superfruit.type}</b>
+                </p>
+                <div className="flex items-center gap-6">
                   <div>
-                    <div className="text-sm text-slate-500 line-through">₹3499</div>
-                    <div className="text-2xl font-semibold text-slate-900">₹{CATALOG.superfruit.price}</div>
+                    <div className="text-sm text-slate-500 line-through">
+                      ₹{CATALOG.superfruit.baseTotal.toLocaleString()}
+                    </div>
+                    <div className="text-2xl font-semibold text-slate-900">
+                      ₹{CATALOG.superfruit.price.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-green-700 mt-1">
+                      Save ₹{CATALOG.superfruit.discount.toLocaleString()} (
+                      {CATALOG.superfruit.discountPercent}%)
+                    </div>
                   </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => addToCart(CATALOG.superfruit, true)}
-                      className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700"
-                      type="button"
-                    >
-                     Buy Now
-                    </button>
-                    {/* <LinkButton href="/buy" variant="outline">Buy Now</LinkButton> */}
-                  </div>
+                  <button
+                    onClick={() => addToCart(CATALOG.superfruit, true)}
+                    className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700"
+                    type="button"
+                  >
+                    Buy Now
+                  </button>
                 </div>
               </div>
             </div>
@@ -248,16 +318,27 @@ export default function Welcome() {
         <Section className="mt-10 sm:mt-14" id="products">
           <SectionTitle eyebrow="Top Picks" title="Featured Products" desc="Hand-picked favorites our customers love." />
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-            <ProductCard product={CATALOG.superfruit}  bullets={["Detox & Freshness", "Cell Repair", "Skin Health"]} />
-            <ProductCard product={CATALOG.immunity}    bullets={["Grape Seed", "Cranberry", "Noni Energy"]} />
-            <ProductCard product={CATALOG.metabolism}  bullets={["Acai Berry", "Green Apple", "Blueberry"]} />
+            <ProductCard
+              product={CATALOG.superfruit}
+              bullets={["Detox & Freshness", "Cell Repair", "Skin Health"]}
+            />
+            <ProductCard
+              product={CATALOG.immunity}
+              bullets={["Grape Seed", "Cranberry", "Noni Energy"]}
+            />
+            <ProductCard
+              product={CATALOG.metabolism}
+              bullets={["Acai Berry", "Green Apple", "Blueberry"]}
+            />
           </div>
         </Section>
 
         {/* Footer */}
         <footer className="bg-slate-950 text-slate-300 py-10 mt-12">
           <Section>
-            <div className="text-center text-sm">© {new Date().getFullYear()} Cellvada. All rights reserved.</div>
+            <div className="text-center text-sm">
+              © {new Date().getFullYear()} Cellvada. All rights reserved.
+            </div>
           </Section>
         </footer>
       </div>

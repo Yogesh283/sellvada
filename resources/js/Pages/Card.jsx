@@ -58,8 +58,7 @@ function CartRow({ item, onInc, onDec, onRemove }) {
   );
 }
 
-export default function Card({ items: serverItems = null, shipping = 49 }) {
-  // Receive server props
+export default function Card({ items: serverItems = null }) { // 🔁 shipping prop हटा दिया
   const { walletBalance = 0, defaultAddress = null } = usePage().props;
 
   const [items, setItems] = useState(serverItems || []);
@@ -84,11 +83,16 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [processing, setProcessing] = useState(false);
 
-  const subTotal = useMemo(() => items.reduce((s, it) => s + Number(it.price) * Number(it.qty), 0), [items]);
-  const discount = useMemo(() => (!appliedCoupon ? 0 : appliedCoupon === "FLAT10" ? Math.round(subTotal * 0.1) : 0), [appliedCoupon, subTotal]);
-  const taxable = Math.max(0, subTotal - discount);
-  const tax = Math.round(taxable * 0.05);
-  const grand = taxable + tax + (items.length ? Number(shipping) : 0);
+  // 👉 Totals: सिर्फ MRP - Coupon, कोई tax/shipping/extra नहीं
+  const subTotal = useMemo(
+    () => items.reduce((s, it) => s + Number(it.price) * Number(it.qty), 0),
+    [items]
+  );
+  const discount = useMemo(
+    () => (!appliedCoupon ? 0 : appliedCoupon === "FLAT10" ? Math.round(subTotal * 0.1) : 0),
+    [appliedCoupon, subTotal]
+  );
+  const grand = Math.max(0, subTotal - discount); // ✅ final payable
 
   const inc = (id) => setItems((arr) => arr.map((it) => (it.id === id ? { ...it, qty: it.qty + 1 } : it)));
   const dec = (id) => setItems((arr) => arr.map((it) => (it.id === id && it.qty > 1 ? { ...it, qty: it.qty - 1 } : it)));
@@ -106,11 +110,12 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
       return;
     }
     if (walletBalance < Number(grand)) {
-      showError("Insufficient wallet balance to complete this order.");
+      showError(`Insufficient wallet balance to pay ${formatINR(grand)}.`);
       return;
     }
 
-    router.post('/checkout', { items, coupon: appliedCoupon, shipping }, {
+    // ⛔️ कोई shipping/extra नहीं भेज रहे
+    router.post('/checkout', { items, coupon: appliedCoupon }, {
       onStart: () => setProcessing(true),
       onFinish: () => setProcessing(false),
       onSuccess: () => { showSuccess('Order placed successfully!'); clearCartEverywhere(); },
@@ -165,7 +170,6 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
               )}
             </div>
 
-            {/* Table header */}
             {items.length === 0 ? (
               <div className="py-10 sm:py-16 text-center">
                 <div className="text-lg sm:text-xl font-semibold text-slate-900">Your cart is empty</div>
@@ -180,13 +184,26 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
 
                 <div className="divide-y divide-slate-100">
                   {items.map((it) => (
-                    <CartRow key={it.id} item={it} onInc={() => setItems(arr => arr.map(x => x.id === it.id ? { ...x, qty: x.qty + 1 } : x))} onDec={() => setItems(arr => arr.map(x => (x.id === it.id && x.qty > 1) ? { ...x, qty: x.qty - 1 } : x))} onRemove={() => setItems(arr => arr.filter(x => x.id !== it.id))} />
+                    <CartRow
+                      key={it.id}
+                      item={it}
+                      onInc={() => setItems(arr => arr.map(x => x.id === it.id ? { ...x, qty: x.qty + 1 } : x))}
+                      onDec={() => setItems(arr => arr.map(x => (x.id === it.id && x.qty > 1) ? { ...x, qty: x.qty - 1 } : x))}
+                      onRemove={() => setItems(arr => arr.filter(x => x.id !== it.id))}
+                    />
                   ))}
                 </div>
 
                 {/* Coupon */}
                 <form onSubmit={applyCoupon} className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                  <input value={coupon} onChange={(e) => setCoupon(e.target.value)} placeholder="Have a coupon? e.g., FLAT10" className="w-full sm:max-w-xs rounded-lg border border-slate-200 px-3 py-2.5 text-sm" inputMode="text" autoComplete="off" />
+                  <input
+                    value={coupon}
+                    onChange={(e) => setCoupon(e.target.value)}
+                    placeholder="Have a coupon? e.g., FLAT10"
+                    className="w-full sm:max-w-xs rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
+                    inputMode="text"
+                    autoComplete="off"
+                  />
                   <button type="submit" className="w-full sm:w-auto rounded-lg bg-sky-600 px-4 py-2.5 text-white text-sm font-semibold hover:bg-sky-700">Apply</button>
                   {appliedCoupon && <span className="text-xs font-medium text-emerald-700">Applied: {appliedCoupon}</span>}
                 </form>
@@ -198,7 +215,6 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
           <aside className="h-max rounded-2xl bg-white p-4 sm:p-6 shadow ring-1 ring-slate-100 lg:sticky lg:top-6">
             <h2 className="text-base sm:text-lg font-semibold text-slate-900">Order Summary</h2>
 
-            {/* Wallet Balance */}
             <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[13px] sm:text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Wallet Balance</span>
@@ -211,22 +227,27 @@ export default function Card({ items: serverItems = null, shipping = 49 }) {
               )}
             </div>
 
-       <div className="mt-3 space-y-1.5 sm:space-y-2 text-[13px] sm:text-sm">
-  <div className="flex items-center justify-between">
-    <span className="text-slate-600">Subtotal</span>
-    <span className="font-medium text-slate-900">{formatINR(subTotal)}</span>
-  </div>
+            <div className="mt-3 space-y-1.5 sm:space-y-2 text-[13px] sm:text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Subtotal</span>
+                <span className="font-medium text-slate-900">{formatINR(subTotal)}</span>
+              </div>
 
-  <div className="my-2 border-t border-slate-200" />
+              {appliedCoupon && discount > 0 && (
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span>Coupon Discount</span>
+                  <span>-{formatINR(discount)}</span>
+                </div>
+              )}
 
-  <div className="flex items-center justify-between text-base font-bold text-slate-900">
-    <span>Total</span>
-    <span>{formatINR(grand)}</span>
-  </div>
-</div>
+              <div className="my-2 border-t border-slate-200" />
 
+              <div className="flex items-center justify-between text-base font-bold text-slate-900">
+                <span>Total</span>
+                <span>{formatINR(grand)}</span>
+              </div>
+            </div>
 
-            {/* CTA */}
             <div className="mt-4 sm:mt-5 grid gap-2 sm:gap-3">
               <button
                 onClick={onCheckout}
