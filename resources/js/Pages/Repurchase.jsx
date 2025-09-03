@@ -1,3 +1,4 @@
+// resources/js/Pages/Repurchase.jsx
 import React, { useMemo, useState } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
@@ -51,6 +52,7 @@ function Popup({ open, title, message, tone = "neutral", onClose }) {
 /* ---------- Cart Row ---------- */
 function Row({ it, onInc, onDec, onRemove }) {
   const line = Number(it.price) * Number(it.qty);
+  const dis = it.discount ? ` (−${formatINR(it.discount)})` : "";
   return (
     <div className="grid grid-cols-1 gap-3 py-3 border-b border-slate-100 sm:grid-cols-[88px_1fr_120px_92px_120px_64px] sm:items-center">
       <div className="h-20 w-20 overflow-hidden rounded-md bg-slate-100">
@@ -58,9 +60,13 @@ function Row({ it, onInc, onDec, onRemove }) {
       </div>
       <div className="min-w-0">
         <div className="text-sm font-semibold text-slate-900">{it.name}</div>
-        {it.variant && <div className="text-xs text-slate-500">{it.variant}</div>}
+        {it.variant && (
+          <div className="text-xs text-slate-500">{it.variant}</div>
+        )}
       </div>
-      <div className="text-sm font-medium text-slate-700">{formatINR(it.price)}</div>
+      <div className="text-sm font-medium text-slate-700">
+        {formatINR(it.price)}
+      </div>
       <div className="flex items-center gap-1">
         <button
           onClick={onDec}
@@ -96,15 +102,61 @@ function Row({ it, onInc, onDec, onRemove }) {
 }
 
 /* ---------- Page ---------- */
-export default function Repurchase({ product, walletBalance = 0, defaultAddress = null }) {
+export default function Repurchase({
+  product,
+  walletBalance = 0,
+  defaultAddress = null,
+}) {
   const { auth } = usePage().props ?? {};
+
+  // ✅ Address card
+  const AddressCard = () => {
+    if (!defaultAddress) {
+      return (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+          ⚠ No shipping address found.{" "}
+          <a
+            href="/address"
+            className="underline font-semibold hover:text-amber-900"
+          >
+            Add Address
+          </a>
+        </div>
+      );
+    }
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-sm">
+        <div className="font-semibold">
+          {defaultAddress.name} ({defaultAddress.phone})
+        </div>
+        <div>
+          {defaultAddress.line1}
+          {defaultAddress.line2 ? `, ${defaultAddress.line2}` : ""},{" "}
+          {defaultAddress.city}, {defaultAddress.state} -{" "}
+          {defaultAddress.pincode}
+        </div>
+        <div>{defaultAddress.country}</div>
+        <div className="mt-3">
+          <a
+            href="/address"
+            className="inline-flex items-center rounded-lg border border-sky-600 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-50"
+          >
+            Change Address
+          </a>
+        </div>
+      </div>
+    );
+  };
 
   // Cart state
   const [items, setItems] = useState([]);
   const add = (p) =>
     setItems((arr) => {
       const f = arr.find((x) => x.id === p.id);
-      if (f) return arr.map((x) => (x.id === p.id ? { ...x, qty: x.qty + 1 } : x));
+      if (f)
+        return arr.map((x) =>
+          x.id === p.id ? { ...x, qty: x.qty + 1 } : x
+        );
       return [
         ...arr,
         {
@@ -175,7 +227,11 @@ export default function Repurchase({ product, walletBalance = 0, defaultAddress 
     if (!items.length)
       return showPopup("Cart Empty", "Please add items to cart.", "error");
     if (!defaultAddress)
-      return showPopup("No Address", "Please add a shipping address.", "error");
+      return showPopup(
+        "No Address",
+        "Please add a shipping address before checkout.",
+        "error"
+      );
     if (walletBalance < Number(grand))
       return showPopup(
         "Insufficient Balance",
@@ -232,41 +288,64 @@ export default function Repurchase({ product, walletBalance = 0, defaultAddress 
           </div>
         </div>
 
-        {/* Product card */}
-        <section className="rounded-2xl bg-white p-4 sm:p-6 shadow ring-1 ring-slate-100">
-          <div className="grid md:grid-cols-[360px_1fr] gap-6 items-start">
-            <img
-              src={product.img}
-              alt={product.name}
-              className="w-[320px] h-[320px] object-cover rounded-2xl bg-slate-50"
-            />
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-slate-900">
-                {product.name}
-              </h2>
-              <div className="text-2xl font-semibold">
-                {formatINR(product.price)}
-              </div>
-              <div className="mt-4 flex w-full flex-col sm:flex-row gap-2">
-                <button
-                  onClick={() => add(product)}
-                  className="w-full sm:w-auto rounded-lg border border-indigo-600 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
-                  type="button"
-                >
-                  Add to Cart
-                </button>
-                <button
-                  onClick={onCheckout}
-                  disabled={processing}
-                  className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:from-indigo-700 hover:to-blue-700 disabled:opacity-60"
-                  type="button"
-                >
-                  {processing ? "Processing..." : "Buy Now"}
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* ✅ Address Section */}
+        <section>
+          <h2 className="text-lg font-semibold mb-2">Shipping Address</h2>
+          <AddressCard />
         </section>
+{/* Product card */}
+<section className="rounded-2xl bg-white p-4 sm:p-6 shadow ring-1 ring-slate-100">
+  <div className="grid md:grid-cols-[360px_1fr] gap-6 items-start">
+    <img
+      src={product.img}
+      alt={product.name}
+      className="w-[320px] h-[320px] object-cover rounded-2xl bg-slate-50"
+    />
+    <div className="space-y-2">
+      <h2 className="text-2xl font-bold text-slate-900">{product.name}</h2>
+      <p className="text-sm text-slate-500">{product.variant}</p>
+
+      {/* ✅ Price info */}
+      <div className="flex items-center gap-3 mt-2">
+        <div className="text-xl font-semibold text-slate-900">
+          ₹{product.price.toLocaleString()}
+        </div>
+        <div className="text-sm line-through text-slate-500">
+          ₹{product.mrp.toLocaleString()}
+        </div>
+        <div className="text-sm text-green-600 font-medium">
+          Save ₹{product.discount.toLocaleString()} ({product.discountPercent}%)
+        </div>
+      </div>
+
+      {/* ✅ Extra info */}
+      <div className="mt-3 text-sm text-slate-700 space-y-1">
+        <div>• Bottles: {product.bottles}</div>
+        <div>• Gummies per Bottle: {product.gummiesPerBottle}</div>
+        <div>• Total Gummies: {product.totalGummies}</div>
+      </div>
+
+      <div className="mt-4 flex w-full flex-col sm:flex-row gap-2">
+        <button
+          onClick={() => add(product)}
+          className="w-full sm:w-auto rounded-lg border border-indigo-600 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+          type="button"
+        >
+          Add to Cart
+        </button>
+        <button
+          onClick={onCheckout}
+          disabled={processing}
+          className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:from-indigo-700 hover:to-blue-700 disabled:opacity-60"
+          type="button"
+        >
+          {processing ? "Processing..." : "Buy Now"}
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
 
         {/* Cart Section */}
         {items.length > 0 && (
@@ -334,28 +413,6 @@ export default function Repurchase({ product, walletBalance = 0, defaultAddress 
               </button>
             </div>
           </section>
-        )}
-
-        {/* Mobile sticky bar */}
-        {items.length > 0 && (
-          <div className="lg:hidden sticky bottom-0 inset-x-0 border-t border-slate-200 bg-white/95 backdrop-blur">
-            <div className="mx-auto max-w-6xl px-3 py-2 flex items-center justify-between gap-3">
-              <div className="text-sm">
-                <div className="text-slate-600">Total</div>
-                <div className="font-semibold text-slate-900">
-                  {formatINR(grand)}
-                </div>
-              </div>
-              <button
-                onClick={onCheckout}
-                disabled={processing}
-                className="inline-flex flex-1 justify-center rounded-lg bg-indigo-600 px-4 py-2 text-white font-semibold hover:bg-indigo-700 disabled:opacity-60"
-                type="button"
-              >
-                {processing ? "…" : "Checkout"}
-              </button>
-            </div>
-          </div>
         )}
       </div>
 

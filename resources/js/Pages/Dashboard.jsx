@@ -1,11 +1,9 @@
-// resources/js/Pages/Dashboard.jsx
 import React, { useState } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, usePage } from "@inertiajs/react";
 
 /* -------------------- UI helpers (with colors) -------------------- */
 const G = {
-  // Card gradients
   tealBlue: "bg-gradient-to-r from-cyan-400 to-blue-600",
   emerald: "bg-gradient-to-r from-emerald-400 to-green-600",
   orangePink: "bg-gradient-to-r from-orange-400 to-pink-500",
@@ -14,17 +12,10 @@ const G = {
   sky: "bg-gradient-to-r from-sky-400 to-cyan-600",
   rose: "bg-gradient-to-r from-rose-500 to-red-600",
   lime: "bg-gradient-to-r from-lime-400 to-green-600",
-
-  // Bars (section headers)
   barTeal: "bg-gradient-to-r from-teal-500 via-cyan-500 to-sky-500",
   barOrange: "bg-gradient-to-r from-orange-500 via-pink-500 to-rose-500",
   barIndigo: "bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-600",
   barEmerald: "bg-gradient-to-r from-green-500 via-emerald-600 to-teal-600",
-
-  // Kept from your original (unused now but harmless to keep)
-  emerald: "bg-gradient-to-r from-green-300 via-green-400 to-green-500",
-  emeraldBar: "bg-gradient-to-r from-green-400 via-green-500 to-green-600",
-  whiteGreen: "bg-gradient-to-b from-white via-green-200 to-green-700",
 };
 
 const formatINR = (n) => {
@@ -47,7 +38,7 @@ const formatDT = (s) => {
 function StatCard({
   title,
   value = "₹0.00",
-  gradient = G.emerald, // default (but we pass custom ones below)
+  gradient = G.emerald,
   icon = "💳",
   actionText = "View Detail",
   actionHref = "#",
@@ -59,7 +50,7 @@ function StatCard({
           <div className="text-sm font-semibold opacity-95">{title}</div>
           <div className="text-xl opacity-90">{icon}</div>
         </div>
-        <div className="mt-3 text-right text-2xl font-extrabold tabular-nums drop-shadow-[0_1px_0_rgba(0,0,0,0.25)]">
+        <div className="mt-3 text-right text-2xl font-extrabold tabular-nums">
           {value}
         </div>
         <div className="mt-3">
@@ -71,7 +62,6 @@ function StatCard({
           </a>
         </div>
       </div>
-      <div className="pointer-events-none absolute -right-12 -top-10 h-40 w-40 rounded-full bg-white/20 blur-2xl" />
     </div>
   );
 }
@@ -108,21 +98,16 @@ function CopyField({ label, value }) {
 
 /* -------------------- Page -------------------- */
 export default function Dashboard() {
-  const { wallet_amount } = usePage().props;
-  const availableBalance = formatINR(wallet_amount ?? 0);
+  const props = usePage().props;
 
-  const { payout_wallet } = usePage().props;
-  const payoutBalance = formatINR(payout_wallet ?? 0);
-
-  const { today_profit } = usePage().props;
-  const Today = formatINR(today_profit ?? 0);
-
-  const { total_team } = usePage().props;
-  const TotalTeam = total_team ?? 0;
+  const availableBalance = formatINR(props?.wallet_amount ?? 0);
+  const payoutBalance = formatINR(props?.payout_wallet ?? 0);
+  const Today = formatINR(props?.today_profit ?? 0);
+  const TotalTeam = props?.total_team ?? 0;
+  const CurrentPlan = props?.current_plan ?? "-";
 
   const {
     user = {},
-    user_all: userAll = {},
     sponsor = null,
     children = {},
     stats = {},
@@ -133,72 +118,128 @@ export default function Dashboard() {
     left_user = null,
     right_user = null,
     ref_link = "#",
-    wallets = {},
-  } = usePage().props;
+  } = props;
 
   const userName = user?.name ?? "-";
   const userId = user?.id ?? "-";
-  const referralId = user?.referral_id ?? "-";
   const createdAt = formatDT(user?.created_at);
-
-  const moneyOut = formatINR(wallets?.withdraw_total ?? 0);
 
   const directReferrals = Number(stats?.direct_referrals ?? 0);
   const leftTeamCount = Number(stats?.left_team ?? (children?.left ? 1 : 0));
   const rightTeamCount = Number(stats?.right_team ?? (children?.right ? 1 : 0));
   const directPV = Number(stats?.direct_pv ?? 0);
 
+  // ✅ new: businessSummary + timewiseSales
+  const businessSummary = props?.businessSummary ?? { left: 0, right: 0 };
+  const timewiseSales = props?.timewiseSales ?? {
+    morning: { left: 0, right: 0 },
+    afternoon: { left: 0, right: 0 },
+  };
+
   return (
-    <AuthenticatedLayout header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Dashboard</h2>}>
+    <AuthenticatedLayout
+      header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Dashboard</h2>}
+    >
       <Head title="Dashboard" />
+      {/* -------------------- Business Summary Table -------------------- */}
+      <div className="w-100 rounded-lg bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-500 px-4 py-3 text-white font-semibold text-center">
+          Business Summary
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm text-center border border-slate-200">
+            <thead className="bg-slate-50">
+              <tr className="border-b text-slate-700">
+                <th className="py-3 px-4">Session</th>
+                <th className="py-3 px-4">Left Business</th>
+                <th className="py-3 px-4">Right Business</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* First Half 12 AM - 12 PM */}
+              <tr className="border-b hover:bg-slate-50">
+                <td className="py-3 px-4 font-medium text-slate-700">First Half 12 AM - 12 PM</td>
+                <td className="py-3 px-4 text-emerald-700 font-semibold">
+                  {formatINR(timewiseSales.first_half?.left ?? 0)}
+                </td>
+                <td className="py-3 px-4 text-blue-700 font-semibold">
+                  {formatINR(timewiseSales.first_half?.right ?? 0)}
+                </td>
+              </tr>
+
+              {/* Second Half 12 PM - 12 AM */}
+              <tr className="hover:bg-slate-50">
+                <td className="py-3 px-4 font-medium text-slate-700">Second Half 12 PM - 12 AM</td>
+                <td className="py-3 px-4 text-emerald-700 font-semibold">
+                  {formatINR(timewiseSales.second_half?.left ?? 0)}
+                </td>
+                <td className="py-3 px-4 text-blue-700 font-semibold">
+                  {formatINR(timewiseSales.second_half?.right ?? 0)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
 
       <div className="mx-auto max-w-[1400px] px-3 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Welcome + referral box */}
         <div className="rounded-md bg-white shadow-sm ring-1 ring-slate-100">
-          <div className="grid gap-4 p-4 md:grid-cols-2">
-            <div className="text-sm text-slate-700">
-              <div className="text-slate-900 font-semibold">Welcome {userName}</div>
-              <div>
-                User ID: <span className="font-mono text-slate-900">{userId}</span>
-              </div>
-              <div className="mt-1">
-                Referral ID: <span className="font-mono text-slate-900">{referralId}</span>
-              </div>
-              <div className="mt-1">
-                Joined: <span className="font-medium">{createdAt}</span>
-              </div>
+          <div className="p-4">
+            <div className="text-slate-900 font-semibold mb-3">Welcome {userName}</div>
 
-              <div className="mt-3 text-slate-500 text-xs">Quick Copy</div>
-              <div className="mt-2 space-y-2">
-                <CopyField label="Signup Link" value={ref_link} />
-                <CopyField label="Referral ID" value={referralId} />
-              </div>
-            </div>
-
-            <div className="flex items-end justify-end gap-2">
-              <a
-                href="/profile"
-                className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700"
-              >
-                View Profile
-              </a>
-              <a
-                href="/team"
-                className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700"
-              >
-                My Team
-              </a>
-              {/* New Tree button (next to My Team) */}
-              <a
-                href="/team/tree"
-                className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700"
-                title="View Team Tree"
-              >
-                Tree
-              </a>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm text-center border border-slate-200">
+                <tbody>
+                  <tr className="border-b">
+                    <td className="px-4 py-2 font-medium text-slate-700">User ID</td>
+                    <td className="px-4 py-2 font-mono text-slate-900">{userId}</td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="px-4 py-2 font-medium text-slate-700">Active Plan</td>
+                    <td className="px-4 py-2 font-mono text-slate-900">{CurrentPlan}</td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="px-4 py-2 font-medium text-slate-700">Joined</td>
+                    <td className="px-4 py-2">{createdAt}</td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="px-4 py-2 font-medium text-slate-700">Signup Link</td>
+                    <td className="px-4 py-2">
+                      <CopyField label="" value={ref_link} />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-medium text-slate-700">Quick Links</td>
+                    <td className="px-4 py-2 flex justify-center gap-2">
+                      <a
+                        href="/profile"
+                        className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
+                      >
+                        View Profile
+                      </a>
+                      <a
+                        href="/team"
+                        className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
+                      >
+                        My Team
+                      </a>
+                      <a
+                        href="/team/tree"
+                        className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
+                        title="View Team Tree"
+                      >
+                        Tree
+                      </a>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
+
 
         {/* Top metric cards (colorful) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">

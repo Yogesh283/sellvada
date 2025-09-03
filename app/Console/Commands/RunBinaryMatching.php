@@ -199,13 +199,11 @@ class RunBinaryMatching extends Command
 
             DB::beginTransaction();
             try {
-                // detail
                 DB::table('binary_payouts')->updateOrInsert(
                     ['sponsor_id'=>$sid,'plan'=>$selfPlan,'closing_date'=>$start->toDateString(),'closing_no'=>$closing],
                     ['volume_left'=>0,'volume_right'=>0,'matched'=>0,'payout'=>$payable,'updated_at'=>now(),'created_at'=>now()]
                 );
 
-                // one entry per user+day+closing
                 $exists = DB::table('_payout')
                     ->where('user_id', $sid)
                     ->where('type', 'binary_matching')
@@ -214,13 +212,12 @@ class RunBinaryMatching extends Command
                     ->exists();
 
                 if (!$exists) {
-                    // GROSS (100%) goes in payout table
                     $gross = number_format($payable, 2, '.', '');
                     DB::table('_payout')->insert([
                         'user_id'      => $sid,
                         'to_user_id'   => $sid,
                         'from_user_id' => $triggerBuyerId,
-                        'amount'       => $gross,              // ✅ full amount (for reporting)
+                        'amount'       => $gross,
                         'status'       => 'pending',
                         'method'       => $method,
                         'type'         => 'binary_matching',
@@ -228,12 +225,8 @@ class RunBinaryMatching extends Command
                         'updated_at'   => now(),
                     ]);
 
-                    // NET credit to wallet = 80% of gross (20% deduction)
-                    $net       = number_format($payable * 0.80, 2, '.', '');           // ✅ only this gets credited
-                    $deduction = number_format($payable - (float)$net, 2, '.', '');    // (optional info)
-
-                    // credit wallet with NET only
-                    $affected = DB::update("UPDATE wallet SET amount = amount + ? WHERE user_id = ?", [$net, $sid]);
+                    $net       = number_format($payable * 0.80, 2, '.', '');
+                    $affected  = DB::update("UPDATE wallet SET amount = amount + ? WHERE user_id = ?", [$net, $sid]);
                     if ($affected === 0) {
                         DB::table('wallet')->insert([
                             'user_id'    => $sid,
@@ -242,12 +235,6 @@ class RunBinaryMatching extends Command
                             'updated_at' => now(),
                         ]);
                     }
-
-                    // (Optional) अगर deduction को track करना हो तो किसी meta/ledger में रखें:
-                    // DB::table('_payout_meta')->insert([
-                    //   'user_id'=>$sid,'payout_type'=>'binary_matching','closing'=>$method,
-                    //   'key'=>'deduction_20_percent','value'=>$deduction,'created_at'=>now(),'updated_at'=>now()
-                    // ]);
                 }
 
                 DB::commit();
@@ -271,9 +258,11 @@ class RunBinaryMatching extends Command
     private function makeWindow(Carbon $day, int $closing): array
     {
         if ($closing === 1) {
-            return [$day->copy()->setTime(6, 0, 0), $day->copy()->setTime(11, 59, 59)];
+            // 12 AM - 12 PM
+            return [$day->copy()->setTime(0, 0, 0), $day->copy()->setTime(11, 59, 59)];
         }
-        return [$day->copy()->setTime(12, 0, 0), $day->copy()->setTime(17, 59, 59)];
+        // 12 PM - 12 AM
+        return [$day->copy()->setTime(12, 0, 0), $day->copy()->setTime(23, 59, 59)];
     }
 
     private function countRowsInWindow(Carbon $start, Carbon $end): int
@@ -286,7 +275,7 @@ class RunBinaryMatching extends Command
 
     private function findLatestDateForClosingWindow(int $closing): ?Carbon
     {
-        [$from, $to] = $closing === 1 ? ['06:00:00','11:59:59'] : ['12:00:00','17:59:59'];
+        [$from, $to] = $closing === 1 ? ['00:00:00','11:59:59'] : ['12:00:00','23:59:59'];
 
         $latest = DB::table($this->sellTable)
             ->where('status', 'paid')

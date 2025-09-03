@@ -15,15 +15,22 @@ class RepurchaseController extends Controller
         abort_unless($userId, 401);
 
         // Product config (single product)
-        $product = [
-            'id'        => 1,
-            'name'      => 'Superfruit Mix (Silver)',
-            'price'     => 1000,   // Sell price
-            'baseTotal' => 2000,   // MRP
-            'discount'  => 1000,   // Discount
-            'variant'   => '1kg Pack',
-            'img'       => '/image/1.png',
-        ];
+      $product = [
+        'id'             => 1,
+        'name'           => 'Super Food (Silver)',
+        'img'            => '/image/1.png',
+        'type'           => 'silver',
+        'variant'        => '1 Bottle (30 Gummies)',
+        'bottles'        => 1,
+        'gummiesPerBottle' => 30,
+        'unitPrice'      => 1000,   // per bottle MRP
+        'mrp'            => 1200,   // maximum retail price
+        'price'          => 1000,   // discounted price (actual selling)
+        'baseTotal'      => 1200,   // total MRP
+        'discount'       => 200,    // savings
+        'discountPercent'=> 16,
+        'totalGummies'   => 30,
+    ];
 
         // Wallet balance
         $walletBalance = (float) DB::table('wallet')
@@ -58,7 +65,7 @@ public function checkout(Request $request)
 
     // Server-side catalog
     $catalog = [
-        1 => ['name' => 'Superfruit Mix (Silver)', 'price' => 1000, 'type' => 'repurchase', 'variant' => '1 bottles' ],
+        1 => ['name' => 'Super Food (Silver)', 'price' => 1000, 'type' => 'repurchase', 'variant' => '1 bottles' ],
     ];
 
     $lines = [];

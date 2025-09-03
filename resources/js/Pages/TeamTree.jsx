@@ -3,7 +3,6 @@ import { Head, Link, usePage } from "@inertiajs/react";
 import AuthenticatedLayout from "../Layouts/AuthenticatedLayout";
 import TeamTreeNode from "../Components/TeamTreeNode";
 
-/* Small pill chip */
 const Chip = ({ children, tone = "slate" }) => {
   const toneMap = {
     slate: "bg-slate-100 text-slate-700",
@@ -18,11 +17,13 @@ const Chip = ({ children, tone = "slate" }) => {
   );
 };
 
-/* Placement / Referral toggle */
 const ViewToggle = ({ seedId, currentType }) => {
   const hrefFor = (type) => {
-    try { return route("team.tree", { root: seedId, type }); }
-    catch { return `/team/tree/${seedId}?type=${type}`; }
+    try {
+      return route("team.tree", { root: seedId, type });
+    } catch {
+      return `/team/tree/${seedId}?type=${type}`;
+    }
   };
   return (
     <div className="inline-flex rounded-2xl border bg-white p-1 shadow-sm">
@@ -86,12 +87,12 @@ export default function TeamTree({ root = null, counts = {}, seed, type = "place
             <Chip tone="emerald">View: {type === "placement" ? "Placement" : "Referral"}</Chip>
           </div>
 
-          {/* Canvas (centered) */}
+          {/* Tree */}
           {root ? (
             <div className="overflow-x-auto overflow-y-hidden rounded-3xl border bg-white p-5 sm:p-6 shadow-sm ring-1 ring-gray-100">
-              {/* center the tree */}
               <div className="min-w-[820px] flex justify-center">
-                <TeamTreeNode node={root} />
+                {/* ✅ Root node always open */}
+                <TeamTreeNode node={root} isRoot />
               </div>
             </div>
           ) : (

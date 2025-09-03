@@ -10,7 +10,7 @@ import "swiper/css";
 const CATALOG = {
   superfruit: {
     id: 1,
-    name: "Superfruit Mix (Silver)",
+    name: "Super Food (Silver)",
     img: "/image/2.png",
     variant: "30 Pic gummies(2 bottles)",
     type: "silver",
@@ -29,7 +29,7 @@ const CATALOG = {
 
   immunity: {
     id: 2,
-    name: "Immunity Boost (Gold)",
+    name: "Super Food (Gold)",
     img: "/image/10.png",
     variant: "30 Pic gummies(10 bottles)",
     type: "gold",
@@ -48,7 +48,7 @@ const CATALOG = {
 
   metabolism: {
     id: 3,
-    name: "Metabolism Max (Diamond)",
+    name: "Super Food(Diamond)",
     img: "/image/20.png",
     variant: "30 Pic gummies(20 bottles)",
     type: "diamond",
