@@ -26,7 +26,9 @@ use App\Http\Controllers\BinarySummaryController;
   use App\Http\Controllers\RepurchaseController;
 
 
-
+Route::get('/admin/dashboard', function () {
+    return Inertia::render('Admin/Dashboard');
+})->name('admin.dashboard');
 
 
 

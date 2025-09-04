@@ -10,37 +10,22 @@ const Chip = ({ children, tone = "slate" }) => {
     purple: "bg-emerald-100 text-emerald-800",
     emerald: "bg-sky-100 text-sky-800",
   };
-  return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${toneMap[tone]}`}>
-      {children}
-    </span>
-  );
+  return <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${toneMap[tone]}`}>{children}</span>;
 };
 
 const ViewToggle = ({ seedId, currentType }) => {
   const hrefFor = (type) => {
-    try {
-      return route("team.tree", { root: seedId, type });
-    } catch {
-      return `/team/tree/${seedId}?type=${type}`;
-    }
+    try { return route("team.tree", { root: seedId, type }); }
+    catch { return `/team/tree/${seedId}?type=${type}`; }
   };
   return (
     <div className="inline-flex rounded-2xl border bg-white p-1 shadow-sm">
-      <Link
-        href={hrefFor("placement")}
-        className={`px-3 py-1.5 rounded-xl text-sm transition ${
-          currentType === "placement" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"
-        }`}
-      >
+      <Link href={hrefFor("placement")}
+        className={`px-3 py-1.5 rounded-xl text-sm transition ${currentType === "placement" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"}`}>
         Placement
       </Link>
-      <Link
-        href={hrefFor("referral")}
-        className={`px-3 py-1.5 rounded-xl text-sm transition ${
-          currentType === "referral" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"
-        }`}
-      >
+      <Link href={hrefFor("referral")}
+        className={`px-3 py-1.5 rounded-xl text-sm transition ${currentType === "referral" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"}`}>
         Referral
       </Link>
     </div>
@@ -90,9 +75,12 @@ export default function TeamTree({ root = null, counts = {}, seed, type = "place
           {/* Tree */}
           {root ? (
             <div className="overflow-x-auto overflow-y-hidden rounded-3xl border bg-white p-5 sm:p-6 shadow-sm ring-1 ring-gray-100">
-              <div className="min-w-[820px] flex justify-center">
-                {/* ✅ Root node always open */}
-                <TeamTreeNode node={root} isRoot />
+              {/* container: full width; place-items-center centers content even when scrollable */}
+              <div className="min-w-full grid place-items-center">
+                {/* actual tree width fits content; mx-auto truly centers */}
+                <div className="w-fit mx-auto sm:min-w-[820px]">
+                  <TeamTreeNode node={root} isRoot />
+                </div>
               </div>
             </div>
           ) : (

@@ -32,9 +32,9 @@ class BinarySummaryController extends Controller
         // skeleton row
         $emptyRow = ['left'=>0,'right'=>0,'orders_left'=>0,'orders_right'=>0,'matched'=>0,'pairs'=>0,'cf_left'=>0,'cf_right'=>0];
         $matrix = [
-            'silver'  => $emptyRow,
-            'gold'    => $emptyRow,
-            'diamond' => $emptyRow,
+            'Silver'  => $emptyRow,
+            'Gold'    => $emptyRow,
+            'Diamond' => $emptyRow,
             'other'   => $emptyRow,
         ];
 

@@ -75,7 +75,7 @@ class ComputeStarRank extends Command
 
                     DB::beginTransaction();
                     try {
-                        // 1) award history (idempotent ensured by exists check; also add UNIQUE(sponsor_id,rank_no) in DB)
+                        // 1) award history
                         DB::table('star_rank_awards')->insert([
                             'sponsor_id'       => $sid,
                             'rank_no'          => $slab->rank_no,
@@ -86,13 +86,19 @@ class ComputeStarRank extends Command
                             'updated_at'       => now(),
                         ]);
 
-                        // 2) payout ledger (_payout)
-                        // method/type aapke UI ke hisaab se; status = 'paid' (turant credit)
+                        // === NET/GROSS calculation (20% cut) ===
+                        $gross = (float)$slab->reward_amount;                 // 100%
+                        $net   = round($gross * 0.80, 2);                     // 80% to wallet
+                        $grossStr = number_format($gross, 2, '.', '');
+                        $netStr   = number_format($net,   2, '.', '');
+                        $deduct   = number_format($gross - $net, 2, '.', ''); // optional meta
+
+                        // 2) payout ledger (_payout) — keep GROSS (100%) for reporting
                         DB::table('_payout')->insert([
-                            'user_id'      => $sid,             // legacy column (if still used)
-                            'to_user_id'   => $sid,             // receiver of reward
-                            'from_user_id' => null,              // system award (no specific buyer)
-                            'amount'       => number_format((float)$slab->reward_amount, 2, '.', ''),
+                            'user_id'      => $sid,
+                            'to_user_id'   => $sid,
+                            'from_user_id' => null,
+                            'amount'       => $grossStr,       // store full reward
                             'status'       => 'paid',
                             'method'       => 'star_rank',
                             'type'         => 'star_award',
@@ -100,26 +106,35 @@ class ComputeStarRank extends Command
                             'updated_at'   => now(),
                         ]);
 
-                        // 3) credit wallet (single-row balance table)
-                        $inc = number_format((float)$slab->reward_amount, 2, '.', '');
+                        // 3) credit wallet with NET only (20% deduction applied)
                         $affected = DB::update(
                             "UPDATE wallet SET amount = amount + ? WHERE user_id = ?",
-                            [$inc, $sid]
+                            [$netStr, $sid]
                         );
                         if ($affected === 0) {
                             DB::table('wallet')->insert([
                                 'user_id'    => $sid,
-                                'amount'     => $inc,
+                                'amount'     => $netStr,
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
                         }
 
+                        // (Optional) deduction ko meta table me log karna ho to:
+                        // DB::table('_payout_meta')->insert([
+                        //   'user_id'   => $sid,
+                        //   'payout_type' => 'star_award',
+                        //   'key'       => 'deduction_20_percent',
+                        //   'value'     => $deduct,
+                        //   'created_at'=> now(),
+                        //   'updated_at'=> now(),
+                        // ]);
+
                         DB::commit();
 
                         $this->info(sprintf(
-                            'AWARDED → SPONSOR=%d RANK=%d AMT=%.2f (asOf=%s)',
-                            $sid, $slab->rank_no, $slab->reward_amount, $asOf->toDateTimeString()
+                            'AWARDED → SPONSOR=%d RANK=%d GROSS=%.2f NET=%.2f (asOf=%s)',
+                            $sid, $slab->rank_no, $gross, $net, $asOf->toDateTimeString()
                         ));
                     } catch (\Throwable $e) {
                         DB::rollBack();

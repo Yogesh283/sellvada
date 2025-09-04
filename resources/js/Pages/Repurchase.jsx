@@ -18,8 +18,8 @@ function Popup({ open, title, message, tone = "neutral", onClose }) {
     tone === "success"
       ? "ring-emerald-400"
       : tone === "error"
-      ? "ring-rose-400"
-      : "ring-cyan-400";
+        ? "ring-rose-400"
+        : "ring-cyan-400";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -293,58 +293,58 @@ export default function Repurchase({
           <h2 className="text-lg font-semibold mb-2">Shipping Address</h2>
           <AddressCard />
         </section>
-{/* Product card */}
-<section className="rounded-2xl bg-white p-4 sm:p-6 shadow ring-1 ring-slate-100">
-  <div className="grid md:grid-cols-[360px_1fr] gap-6 items-start">
-    <img
-      src={product.img}
-      alt={product.name}
-      className="w-[320px] h-[320px] object-cover rounded-2xl bg-slate-50"
-    />
-    <div className="space-y-2">
-      <h2 className="text-2xl font-bold text-slate-900">{product.name}</h2>
-      <p className="text-sm text-slate-500">{product.variant}</p>
+        {/* Product card */}
+        <section className="rounded-2xl bg-white p-4 sm:p-6 shadow ring-1 ring-slate-100">
+          <div className="grid md:grid-cols-[360px_1fr] gap-6 items-start">
+            <img
+              src={product.img}
+              alt={product.name}
+              className="w-[320px] h-[320px] object-cover rounded-2xl bg-slate-50"
+            />
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-slate-900">{product.name}</h2>
+              <p className="text-sm text-slate-500">{product.variant}</p>
 
-      {/* ✅ Price info */}
-      <div className="flex items-center gap-3 mt-2">
-        <div className="text-xl font-semibold text-slate-900">
-          ₹{product.price.toLocaleString()}
-        </div>
-        <div className="text-sm line-through text-slate-500">
-          ₹{product.mrp.toLocaleString()}
-        </div>
-        <div className="text-sm text-green-600 font-medium">
-          Save ₹{product.discount.toLocaleString()} ({product.discountPercent}%)
-        </div>
-      </div>
+              {/* ✅ Price info */}
+              <div className="flex items-center gap-3 mt-2">
+                <div className="text-xl font-semibold text-slate-900">
+                  ₹{product.price.toLocaleString()}
+                </div>
+                <div className="text-sm line-through text-slate-500">
+                  ₹{product.mrp.toLocaleString()}
+                </div>
+                <div className="text-sm text-green-600 font-medium">
+                  Save ₹{product.discount.toLocaleString()} ({product.discountPercent}%)
+                </div>
+              </div>
 
-      {/* ✅ Extra info */}
-      <div className="mt-3 text-sm text-slate-700 space-y-1">
-        <div>• Bottles: {product.bottles}</div>
-        <div>• Gummies per Bottle: {product.gummiesPerBottle}</div>
-        <div>• Total Gummies: {product.totalGummies}</div>
-      </div>
+              {/* ✅ Extra info */}
+              <div className="mt-3 text-sm text-slate-700 space-y-1">
+                <div>• Bottles: {product.bottles}</div>
+                <div>• Gummies per Bottle: {product.gummiesPerBottle}</div>
+                <div>• Total Gummies: {product.totalGummies}</div>
+              </div>
 
-      <div className="mt-4 flex w-full flex-col sm:flex-row gap-2">
-        <button
-          onClick={() => add(product)}
-          className="w-full sm:w-auto rounded-lg border border-indigo-600 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
-          type="button"
-        >
-          Add to Cart
-        </button>
-        <button
-          onClick={onCheckout}
-          disabled={processing}
-          className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:from-indigo-700 hover:to-blue-700 disabled:opacity-60"
-          type="button"
-        >
-          {processing ? "Processing..." : "Buy Now"}
-        </button>
-      </div>
-    </div>
-  </div>
-</section>
+              <div className="mt-4 flex w-full flex-col sm:flex-row gap-2">
+                <button
+                  onClick={() => add(product)}
+                  className="w-full sm:w-auto rounded-lg border border-indigo-600 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+                  type="button"
+                >
+                  Add to Cart
+                </button>
+                <button
+                  onClick={onCheckout}
+                  disabled={processing}
+                  className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:from-indigo-700 hover:to-blue-700 disabled:opacity-60"
+                  type="button"
+                >
+                  {processing ? "Processing..." : "Buy Now"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
 
 
         {/* Cart Section */}

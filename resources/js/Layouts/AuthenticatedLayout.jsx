@@ -36,6 +36,8 @@ export default function AuthenticatedLayout({ header, children }) {
                 <NavLink href={route('dashboard')} active={is('dashboard')} className="text-black">
                   Dashboard
                 </NavLink>
+              
+
 
                 <NavLink href="/" active={is('home')} className="text-black">
                   Products
@@ -171,6 +173,13 @@ export default function AuthenticatedLayout({ header, children }) {
                 </div>
               )}
             </div>
+
+            {/* ✅ Mobile: show username before hamburger */}
+            {user && (
+              <div className="sm:hidden text-sm font-medium text-gray-700 mr-2 truncate max-w-[120px]">
+                {user.name}
+              </div>
+            )}
 
             {/* Mobile: hamburger */}
             <button

@@ -13,13 +13,13 @@ class RunBinaryMatching extends Command
     protected $signature   = 'binary:match {closing : 1 or 2} {--date=}';
     protected $description = 'Compute package-based single-pair binary payout from sell table (with self qualification)';
 
-    // level order
+    // canonical level order (all LOWERCASE)
     private array $order = ['silver' => 1, 'gold' => 2, 'diamond' => 3];
 
-    // amount per package (single pair)
+    // amount per package (single pair) - LOWERCASE keys
     private array $planAmount = ['silver' => 3000.00, 'gold' => 18000.00, 'diamond' => 48000.00];
 
-    // capping
+    // capping - LOWERCASE keys
     private array $capPerClosing = ['silver'=>3000.00, 'gold'=>18000.00, 'diamond'=>48000.00];
     private array $capPerDay     = ['silver'=>6000.00, 'gold'=>36000.00, 'diamond'=>96000.00];
 
@@ -74,7 +74,7 @@ class RunBinaryMatching extends Command
 
             // 1) Self qualification
             $selfLvl  = $this->getSelfLevel($sid, $end); // 0/1/2/3
-            $selfPlan = $this->lvlToPlan($selfLvl);
+            $selfPlan = $this->lvlToPlan($selfLvl);      // 'silver' | 'gold' | 'diamond' | null
             if (!$selfPlan) {
                 $this->recordNoPay($sid, 'none', $start, $closing);
                 $this->line("NO SELF → SPONSOR={$sid}");
@@ -106,7 +106,7 @@ class RunBinaryMatching extends Command
 
             if (!$leftPlan || !$rightPlan) {
                 $this->recordNoPay($sid, $selfPlan, $start, $closing);
-                $this->line("NO L/R → SPONSOR={$sid} SELF={$selfPlan}");
+                $this->line("NO L/R → SPONSOR={$sid} SELF=".strtoupper($selfPlan));
                 continue;
             }
 
@@ -120,13 +120,13 @@ class RunBinaryMatching extends Command
                     $reason  = 'silver_pair_only';
                 } else {
                     $this->recordNoPay($sid, $selfPlan, $start, $closing);
-                    $this->line("NOT ALLOWED (SILVER needs S/S) → SPONSOR={$sid} L={$leftPlan} R={$rightPlan}");
+                    $this->line("NOT ALLOWED (SILVER needs S/S) → SPONSOR={$sid} L=".strtoupper($leftPlan)." R=".strtoupper($rightPlan));
                     continue;
                 }
             } elseif ($selfPlan === 'gold') {
                 if ($leftLvl === 3 || $rightLvl === 3) {
                     $this->recordNoPay($sid, $selfPlan, $start, $closing);
-                    $this->line("NOT ALLOWED (GOLD with DIAMOND leg) → SPONSOR={$sid} L={$leftPlan} R={$rightPlan}");
+                    $this->line("NOT ALLOWED (GOLD with DIAMOND leg) → SPONSOR={$sid} L=".strtoupper($leftPlan)." R=".strtoupper($rightPlan));
                     continue;
                 }
                 if ($leftLvl === 2 && $rightLvl === 2) {
@@ -137,7 +137,7 @@ class RunBinaryMatching extends Command
                     $reason  = 'fallback_silver_pair_on_gold_self';
                 } else {
                     $this->recordNoPay($sid, $selfPlan, $start, $closing);
-                    $this->line("NO MATCH (GOLD) → SPONSOR={$sid} L={$leftPlan} R={$rightPlan}");
+                    $this->line("NO MATCH (GOLD) → SPONSOR={$sid} L=".strtoupper($leftPlan)." R=".strtoupper($rightPlan));
                     continue;
                 }
             } else { // diamond
@@ -152,7 +152,7 @@ class RunBinaryMatching extends Command
                     $reason  = 'both_at_least_silver';
                 } else {
                     $this->recordNoPay($sid, $selfPlan, $start, $closing);
-                    $this->line("NO MATCH (DIAMOND) → SPONSOR={$sid} L={$leftPlan} R={$rightPlan}");
+                    $this->line("NO MATCH (DIAMOND) → SPONSOR={$sid} L=".strtoupper($leftPlan)." R=".strtoupper($rightPlan));
                     continue;
                 }
             }
@@ -183,7 +183,7 @@ class RunBinaryMatching extends Command
 
             if ($payable <= 0) {
                 $this->recordNoPay($sid, $selfPlan, $start, $closing);
-                $this->line("CAPPED OUT → SPONSOR={$sid} SELF={$selfPlan} CLOSE={$closing} DATE={$start->toDateString()}");
+                $this->line("CAPPED OUT → SPONSOR={$sid} SELF=".strtoupper($selfPlan)." CLOSE={$closing} DATE={$start->toDateString()}");
                 continue;
             }
 
@@ -217,7 +217,7 @@ class RunBinaryMatching extends Command
                         'user_id'      => $sid,
                         'to_user_id'   => $sid,
                         'from_user_id' => $triggerBuyerId,
-                        'amount'       => $gross,
+                        'amount'       => $gross,         // keep GROSS in ledger
                         'status'       => 'pending',
                         'method'       => $method,
                         'type'         => 'binary_matching',
@@ -225,6 +225,7 @@ class RunBinaryMatching extends Command
                         'updated_at'   => now(),
                     ]);
 
+                    // Credit NET (80%) to wallet
                     $net       = number_format($payable * 0.80, 2, '.', '');
                     $affected  = DB::update("UPDATE wallet SET amount = amount + ? WHERE user_id = ?", [$net, $sid]);
                     if ($affected === 0) {
@@ -240,7 +241,7 @@ class RunBinaryMatching extends Command
                 DB::commit();
                 $this->info(sprintf(
                     'PAID → SPONSOR=%d SELF=%s L=%s R=%s CLOSE=%d DATE=%s GROSS=%.2f (NET=%.2f) %s FROM=%s',
-                    $sid, strtoupper($selfPlan), $leftPlan, $rightPlan,
+                    $sid, strtoupper($selfPlan), strtoupper($leftPlan), strtoupper($rightPlan),
                     $closing, $start->toDateString(), $payable, $payable * 0.80, $reason, $triggerBuyerId ?? 'null'
                 ));
             } catch (\Throwable $e) {

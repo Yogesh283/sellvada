@@ -17,18 +17,18 @@ class RepurchaseController extends Controller
         // Product config (single product)
       $product = [
         'id'             => 1,
-        'name'           => 'Super Food (Silver)',
+        'name'           => 'Super Food',
         'img'            => '/image/1.png',
-        'type'           => 'silver',
+        'type'           => 'Silver',
         'variant'        => '1 Bottle (30 Gummies)',
         'bottles'        => 1,
         'gummiesPerBottle' => 30,
-        'unitPrice'      => 1000,   // per bottle MRP
-        'mrp'            => 1200,   // maximum retail price
+        'unitPrice'      => 2000,   // per bottle MRP
+        'mrp'            => 2000,   // maximum retail price
         'price'          => 1000,   // discounted price (actual selling)
-        'baseTotal'      => 1200,   // total MRP
-        'discount'       => 200,    // savings
-        'discountPercent'=> 16,
+        'baseTotal'      => 2000,   // total MRP
+        'discount'       => 1000,    // savings
+        'discountPercent'=> 50,
         'totalGummies'   => 30,
     ];
 
@@ -65,7 +65,7 @@ public function checkout(Request $request)
 
     // Server-side catalog
     $catalog = [
-        1 => ['name' => 'Super Food (Silver)', 'price' => 1000, 'type' => 'repurchase', 'variant' => '1 bottles' ],
+        1 => ['name' => 'Super Food', 'price' => 1000, 'type' => 'repurchase', 'variant' => '1 bottles' ],
     ];
 
     $lines = [];

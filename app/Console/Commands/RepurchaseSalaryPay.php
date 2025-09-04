@@ -58,12 +58,19 @@ class RepurchaseSalaryPay extends Command
                     continue;
                 }
 
-                // 1) payout ledger
+                // ===== 20% deduction rules =====
+                $gross = (float) $row->amount;                  // 100% for ledger
+                $net   = round($gross * 0.80, 2);               // 80% credited to wallet
+                $grossStr = number_format($gross, 2, '.', '');
+                $netStr   = number_format($net,   2, '.', '');
+                // $deduct = number_format($gross - $net, 2, '.', ''); // (optional) if you log meta
+
+                // 1) payout ledger (_payout) — keep GROSS for reporting
                 DB::table('_payout')->insert([
                     'user_id'      => $row->sponsor_id,     // legacy
                     'to_user_id'   => $row->sponsor_id,
                     'from_user_id' => null,                 // system award
-                    'amount'       => number_format((float)$row->amount, 2, '.', ''),
+                    'amount'       => $grossStr,            // store full reward
                     'status'       => 'paid',
                     'method'       => 'repurchase_salary',
                     'type'         => 'repurchase_salary',
@@ -71,20 +78,20 @@ class RepurchaseSalaryPay extends Command
                     'updated_at'   => now(),
                 ]);
 
-                // 2) credit wallet
-                $inc = number_format((float)$row->amount, 2, '.', '');
+                // 2) credit wallet with NET only (after 20% deduction)
                 $affected = DB::update(
                     "UPDATE wallet SET amount = amount + ? WHERE user_id = ?",
-                    [$inc, $row->sponsor_id]
+                    [$netStr, $row->sponsor_id]
                 );
                 if ($affected === 0) {
                     DB::table('wallet')->insert([
                         'user_id'    => $row->sponsor_id,
-                        'amount'     => $inc,
+                        'amount'     => $netStr,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
                 }
+
 
                 // 3) mark installment paid + bump qualification counters
                 DB::table('repurchase_salary_installments')
@@ -104,7 +111,7 @@ class RepurchaseSalaryPay extends Command
                 }
 
                 DB::commit();
-                $this->info("PAID → sponsor={$row->sponsor_id} month={$mStart->format('Y-m')} amount={$row->amount}");
+                $this->info("PAID → sponsor={$row->sponsor_id} month={$mStart->format('Y-m')} GROSS={$grossStr} NET={$netStr}");
             } catch (\Throwable $e) {
                 DB::rollBack();
                 $this->error("ERR pay sponsor={$row->sponsor_id}: ".$e->getMessage());

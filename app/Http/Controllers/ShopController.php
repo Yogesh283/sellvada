@@ -14,7 +14,7 @@ class ShopController extends Controller
         $catalog = [
             [
                 'id' => 1,
-                'name' => 'Superfruit Mix (Silver)',
+                'name' => 'Super Food (Silver)',
                 'price' => 3000,
                 'variant' => '350g Jar',
                 'img' => '/images/1.png',
@@ -22,7 +22,7 @@ class ShopController extends Controller
             ],
             [
                 'id' => 2,
-                'name' => 'Immunity Boost (Gold)',
+                'name' => 'Super Food (Gold)',
                 'price' => 15000,
                 'variant' => '200g Pack',
                 'img' => '/images/2.png',
@@ -30,7 +30,7 @@ class ShopController extends Controller
             ],
             [
                 'id' => 3,
-                'name' => 'Diamond Wellness Kit',
+                'name' => 'Super Food (Diamond Combo) ',
                 'price' => 48000,
                 'variant' => 'Combo',
                 'img' => '/images/3.png',

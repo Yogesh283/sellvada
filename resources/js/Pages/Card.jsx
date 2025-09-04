@@ -15,7 +15,7 @@ const loadCart = () => {
   }
 };
 const saveCart = (items) => {
-  try { localStorage.setItem(lsKey, JSON.stringify(items)); } catch {}
+  try { localStorage.setItem(lsKey, JSON.stringify(items)); } catch { }
 };
 
 function QtyButton({ onClick, children, disabled, "aria-label": ariaLabel }) {
@@ -114,12 +114,27 @@ export default function Card({ items: serverItems = null }) { // 🔁 shipping p
       return;
     }
 
-    // ⛔️ कोई shipping/extra नहीं भेज रहे
-    router.post('/checkout', { items, coupon: appliedCoupon }, {
+    router.post('/checkout', {
+      items,
+      coupon: appliedCoupon,
+      shipping: 0   // 👈 या जो भी shipping amount है
+    }, {
       onStart: () => setProcessing(true),
       onFinish: () => setProcessing(false),
-      onSuccess: () => { showSuccess('Order placed successfully!'); clearCartEverywhere(); },
-      onError: (errors) => { if (errors?.wallet) showError(errors.wallet); else showError('Checkout failed.'); },
+      onSuccess: () => {
+        showSuccess('Order placed successfully!');
+        clearCartEverywhere();
+      },
+      onError: (errors) => {
+        if (errors?.wallet) {
+          showError(errors.wallet);
+        } else if (typeof errors === "object" && Object.keys(errors).length) {
+          const firstError = Object.values(errors)[0];
+          showError(firstError);
+        } else {
+          showError('Checkout failed. Please try again.');
+        }
+      },
     });
   };
 

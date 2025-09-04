@@ -39,10 +39,11 @@ class CheckoutController extends Controller
         $discount = $coupon === 'FLAT10' ? round($subTotal * 0.10) : 0.0;
 
         $taxable  = max(0.0, $subTotal - $discount);
-        $tax      = round($taxable * 0.05);
-        $grand    = $taxable + $tax + (count($data['items']) ? (float)$data['shipping'] : 0.0);
+        $tax      = round($taxable * 0.05, 2);
+        $extra    = round($taxable * 0.15, 2);
+        $shipping = count($data['items']) ? (float)$data['shipping'] : 0.0;
+        $grand    = $taxable + $tax + $extra + $shipping;
 
-        // 3) Resolve sponsor/upline and leg (for sell rows)
         $sponsorId = $this->resolveSponsorId($user);
         $leg       = $user->position ?: null; // 'L' or 'R'
 
