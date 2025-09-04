@@ -243,20 +243,15 @@ export default function Dashboard() {
 
         {/* Top metric cards (colorful) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard title="Binary Matching" value="" icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
+          <StatCard title="VIP Repurchase Salary" value=" " icon="📍" actionHref="/income/vip-repurchase-salary" gradient={G.amber} />
+          <StatCard title="Star Matching" value="" icon="💸" actionHref="/income/star" gradient={G.purpleIndigo} />
           <StatCard title="Wallet Balance" value={availableBalance} icon="👛" gradient={G.tealBlue} />
           <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" gradient={G.emerald} />
-          <StatCard title="Binary Matching" value="" icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
-          <StatCard title="Star Matching" value="" icon="💸" actionHref="/income/star" gradient={G.purpleIndigo} />
-        </div>
-
-        {/* Profile & My Team row (colorful) */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="VIP Repurchase Salary" value=" " icon="📍" actionHref="/income/vip-repurchase-salary" gradient={G.amber} />
-          <StatCard title="MY PROFILE" value=" " icon="👤" actionHref="/profile" gradient={G.sky} />
+            <StatCard title="MY PROFILE" value=" " icon="👤" actionHref="/profile" gradient={G.sky} />
           <StatCard title="MY INCOME" value=" " icon="₹" actionHref="/income" gradient={G.rose} />
           <StatCard title="MY TEAM" value={TotalTeam} icon="👥" actionHref="/team" gradient={G.lime} />
         </div>
-
         {/* Accounts/Team counters */}
         <div className="rounded-lg shadow-sm ring-1 ring-slate-100 overflow-hidden">
           <div className={`${G.barEmerald} px-4 py-3 text-white text-center font-semibold`}>

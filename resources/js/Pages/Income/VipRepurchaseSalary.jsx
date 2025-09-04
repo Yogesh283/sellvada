@@ -175,7 +175,7 @@ export default function VipRepurchaseSalary({
 
         {/* Slab table (responsive & pretty) */}
         <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="bg-gray-50 px-4 py-3 text-sm font-semibold tracking-wide text-gray-700">
+          <div className="bg-relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 p-4 sm:p-6 text-white shadow-sm backdrop-blur text-left">
             Salary Slabs (3 Months)
           </div>
 

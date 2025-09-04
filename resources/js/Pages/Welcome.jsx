@@ -66,30 +66,131 @@ const CATALOG = {
   },
 };
 
-/* ----------------- Slider ----------------- */
-const slides = ["/image/AAAA.png", "/image/S2.png", "/image/S3.png", "/image/S4.png"];
+
+
+
+const slides = [
+  {
+    title: "GREEN APPLE",
+    subtitle: "Detox & Freshness",
+    points: [
+      "Helps flush out toxins from the body.",
+      "Keeps the liver clean and healthy.",
+      "Improves digestion.",
+      "Provides instant energy.",
+      "Gives the skin a natural glow and freshness.",
+      "Helps in weight management.",
+      "Regulates blood sugar levels.",
+      "Strengthens the heart and keeps it healthy.",
+    ],
+    color: "bg-green-100 text-green-700",
+  },
+  {
+    title: "GRAPE SEED",
+    subtitle: "Blood Flow & Immunity",
+    points: [
+      "Improves blood circulation.",
+      "Helps in controlling blood pressure.",
+      "Keeps the heart healthy and strong.",
+      "Boosts immunity and helps fight diseases.",
+      "Reduces oxidative stress and toxins.",
+      "Maintains healthy cholesterol levels.",
+      "Improves energy and stamina.",
+      "Supports overall wellness.",
+    ],
+    color: "bg-purple-100 text-purple-700",
+  },
+  {
+    title: "BLUEBERRY",
+    subtitle: "Brain & Heart Health",
+    points: [
+      "Boosts memory power and brain function.",
+      "Improves concentration and focus.",
+      "Helps reduce mental stress and fatigue.",
+      "Maintains heart health and regulates cholesterol.",
+      "Rich in antioxidants that slow aging.",
+      "Improves vision and eye health.",
+      "Strengthens the immune system.",
+      "Protects cells from damage and improves skin glow.",
+    ],
+    color: "bg-blue-100 text-blue-700",
+  },
+  {
+    title: "NONI",
+    subtitle: "Ancient Vitality Booster",
+    points: [
+      "Improves energy and reduces tiredness.",
+      "Boosts immunity and overall wellness.",
+      "Helps in joint pain and muscle strength.",
+      "Promotes better sleep and relaxation.",
+      "Reduces inflammation in the body.",
+      "Helps regulate blood sugar levels.",
+      "Supports digestion and gut health.",
+      "Improves skin quality and natural glow.",
+    ],
+    color: "bg-yellow-100 text-yellow-700",
+  },
+  {
+    title: "CRANBERRY",
+    subtitle: "Skin & Urinary Health",
+    points: [
+      "Improves kidney and urinary health.",
+      "Helps prevent urinary tract infections (UTIs).",
+      "Improves digestion and stomach function.",
+      "Strengthens the immune system.",
+      "Maintains oral health and prevents gum issues.",
+      "Improves skin health and glow.",
+      "Boosts energy and stamina.",
+      "Protects from harmful bacteria growth.",
+    ],
+    color: "bg-red-100 text-red-700",
+  },
+  {
+    title: "ACAI BERRY",
+    subtitle: "Anti-Aging & Metabolism",
+    points: [
+      "Slows down signs of aging naturally.",
+      "Improves metabolism and fat burning.",
+      "Boosts stamina and physical performance.",
+      "Helps maintain healthy cholesterol levels.",
+      "Strengthens immunity and energy levels.",
+      "Rich in antioxidants to fight free radicals.",
+      "Supports healthy skin and glow.",
+      "Improves digestion and gut health.",
+    ],
+    color: "bg-indigo-100 text-indigo-700",
+  },
+];
+
 function ImageSlider() {
   return (
     <Swiper
       modules={[Autoplay]}
       autoplay={{ delay: 3500, disableOnInteraction: false }}
       loop
-      className="w-full h-[420px] sm:h-[480px] md:h-[520px] rounded-2xl overflow-hidden shadow-xl"
+      className="w-full h-[380px] sm:h-[420px] md:h-[460px] rounded-2xl overflow-hidden shadow-xl bg-white"
     >
-      {slides.map((src, i) => (
-        <SwiperSlide key={i} className="flex items-center justify-center bg-white">
-          <img
-            src={src}
-            alt={`slide-${i + 1}`}
-            loading="lazy"
-            className="h-full w-full object-cover"
-            onError={(e) => (e.currentTarget.style.display = "none")}
-          />
+      {slides.map((item, i) => (
+        <SwiperSlide
+          key={i}
+          className={`flex flex-col items-center justify-center ${item.color} p-6 text-center`}
+        >
+          <h2 className="text-2xl sm:text-3xl font-bold">{item.title}</h2>
+          <h3 className="mt-1 text-lg sm:text-xl font-semibold">{item.subtitle}</h3>
+          <ul className="mt-3 text-sm sm:text-base max-w-lg text-left space-y-1">
+            {item.points.map((p, idx) => (
+              <li key={idx} className="flex items-start gap-2">
+                <span>✅</span>
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
         </SwiperSlide>
       ))}
     </Swiper>
   );
 }
+
 
 /* ----------------- UI helpers ----------------- */
 const Section = ({ children, className = "" }) => (
