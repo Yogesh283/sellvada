@@ -173,17 +173,18 @@ export default function VipRepurchaseSalary({
           />
         </div>
 
-        {/* Slab table (responsive & pretty) */}
-        <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="bg-relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 p-4 sm:p-6 text-white shadow-sm backdrop-blur text-left">
-            Salary Slabs (3 Months)
+        {/* ------------------ prettier responsive slab table (REPLACED) ------------------ */}
+        <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow">
+          {/* Gradient header */}
+          <div className="bg-gradient-to-r from-indigo-600 to-violet-600 h-12 flex items-center px-4">
+            <h3 className="text-sm font-semibold text-white">Salary Slabs (3 Months)</h3>
           </div>
 
-          {/* Desktop table — prettier */}
+          {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-white/80 backdrop-blur text-left text-gray-600">
+              <thead>
+                <tr className="bg-gray-50 text-left text-gray-700 uppercase text-xs tracking-wider">
                   <Th className="w-36 rounded-tl-2xl">Rank</Th>
                   <Th>Monthly Matching Volume</Th>
                   <Th>Salary</Th>
@@ -197,26 +198,24 @@ export default function VipRepurchaseSalary({
                   return (
                     <tr
                       key={idx}
-                      className={`transition-colors ${
-                        hit
-                          ? "bg-emerald-50/70 hover:bg-emerald-50"
-                          : idx % 2
-                          ? "bg-gray-50/60 hover:bg-gray-50"
-                          : "hover:bg-gray-50/60"
+                      className={`transition-colors duration-200 ${
+                        hit ? "bg-emerald-50 hover:bg-emerald-100" : idx % 2 ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-gray-50"
                       }`}
                     >
-                      <Td className="font-semibold">{s.rank}</Td>
+                      <Td className="font-semibold px-4 py-3">{s.rank}</Td>
 
-                      <Td className="whitespace-nowrap">
-                        <span className="font-mono">{formatINR(s.volume)}</span>{" "}
-                        <span className="text-gray-500">({formatINRCompact(s.volume)})</span>
+                      <Td className="whitespace-nowrap px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono">{formatINR(s.volume)}</span>
+                          <span className="text-gray-400 text-xs">({formatINRCompact(s.volume)})</span>
+                        </div>
                       </Td>
 
-                      <Td className="whitespace-nowrap font-semibold">
+                      <Td className="whitespace-nowrap font-semibold px-4 py-3">
                         <span className="font-mono">{formatINR(s.salary)}</span>
                       </Td>
 
-                      <Td className="text-center">
+                      <Td className="text-center px-4 py-3">
                         <StatusPill hit={hit} />
                       </Td>
                     </tr>
@@ -226,22 +225,22 @@ export default function VipRepurchaseSalary({
             </table>
           </div>
 
-          {/* Mobile cards — tighter & clean */}
+          {/* Mobile cards */}
           <div className="md:hidden divide-y">
             {slabs.map((s, idx) => {
               const hit = (summary?.matched || 0) >= s.volume;
               return (
-                <div key={idx} className="p-4">
+                <div key={idx} className="p-4 bg-white hover:bg-gray-50 transition-colors duration-150">
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-semibold">{s.rank}</div>
                     <StatusPill hit={hit} />
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-[13px]">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div className="text-gray-500">Monthly Matching</div>
                     <div className="text-right font-medium">
                       <span className="font-mono">{formatINR(s.volume)}</span>{" "}
-                      <span className="text-gray-500">({formatINRCompact(s.volume)})</span>
+                      <span className="text-gray-400">({formatINRCompact(s.volume)})</span>
                     </div>
 
                     <div className="text-gray-500">Salary</div>
@@ -254,6 +253,7 @@ export default function VipRepurchaseSalary({
             })}
           </div>
         </div>
+        {/* ------------------ end replaced table ------------------ */}
 
         {/* Small note */}
         <div className="mt-4 mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">

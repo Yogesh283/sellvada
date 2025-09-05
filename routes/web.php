@@ -26,9 +26,23 @@ use App\Http\Controllers\BinarySummaryController;
   use App\Http\Controllers\RepurchaseController;
 
 
-Route::get('/admin/dashboard', function () {
-    return Inertia::render('Admin/Dashboard');
-})->name('admin.dashboard');
+use App\Http\Controllers\Admin\UserReportController;
+
+Route::middleware(['auth', 'verified', 'admin'])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        Route::get('/users', fn () => Inertia::render('Admin/Users'))
+            ->name('users.index');
+    });
+
+
+Route::middleware(['auth','verified','can:access-admin'])
+    ->prefix('admin')->name('admin.')
+    ->group(function () {
+        Route::get('/users', [\App\Http\Controllers\Admin\UserReportController::class, 'index'])
+            ->name('users.index');
+    });
 
 
 

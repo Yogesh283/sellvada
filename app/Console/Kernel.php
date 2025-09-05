@@ -47,6 +47,12 @@ protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule): 
         ->timezone($tz)
         ->dailyAt('00:20')
         ->appendOutputTo(storage_path('logs/repurchase_pay.log'));
+
+        protected $routeMiddleware = [
+    // ...
+    'admin' => \App\Http\Middleware\AdminOnly::class,
+];
+
 }
 
 

@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
 
+
 const formatINR = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n || 0));
 
