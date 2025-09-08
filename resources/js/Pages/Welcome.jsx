@@ -68,24 +68,12 @@ const CATALOG = {
 
 
 const slides = [
-  {
-    img: "/image/Web Long Banner1.png",
-  },
-  {
-    img: "/image/Web Long Banner2.png",
-  },
-  {
-    img: "/image/Web Long Banner3.png",
-  },
-  {
-    img: "/image/Web Long Banner4.png",
-  },
-  {
-    img: "/image/Web Long Banner5.png",
-  },
-  {
-    img: "/image/Web Long Banner6.png",
-  },
+  { img: "/image/Web Long Banner1.png" },
+  { img: "/image/Web Long Banner2.png" },
+  { img: "/image/Web Long Banner3.png" },
+  { img: "/image/Web Long Banner4.png" },
+  { img: "/image/Web Long Banner5.png" },
+  { img: "/image/Web Long Banner6.png" },
 ];
 
 function ImageSlider() {
@@ -94,7 +82,9 @@ function ImageSlider() {
       modules={[Autoplay]}
       autoplay={{ delay: 3500, disableOnInteraction: false }}
       loop
-      className="w-full h-[380px] sm:h-[420px] md:h-[460px] rounded-2xl overflow-hidden shadow-xl bg-white"
+      className="w-full 
+        h-[180px] sm:h-[250px] md:h-[380px] lg:h-[460px] 
+        rounded-2xl overflow-hidden shadow-xl bg-white"
     >
       {slides.map((item, i) => (
         <SwiperSlide key={i} className="flex items-center justify-center">
@@ -108,6 +98,7 @@ function ImageSlider() {
     </Swiper>
   );
 }
+
 
 
 
