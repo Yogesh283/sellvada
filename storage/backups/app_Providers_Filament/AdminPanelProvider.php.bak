@@ -1,0 +1,22 @@
+<?php
+namespace App\Providers\Filament;
+
+use Filament\PanelProvider;
+use Filament\Panel;
+
+class AdminPanelProvider extends PanelProvider
+{
+    /**
+     * Provide the Filament panel.
+     *
+     * Signature must match PanelProvider::panel(Panel $panel): Panel
+     */
+    public function panel(Panel $panel): Panel
+    {
+        // Use the injected $panel and set a stable id.
+        return $panel
+            ->id('admin')         // IMPORTANT: set a unique id
+            ->label('Admin')      // optional label
+            ->default();          // mark as default panel
+    }
+}

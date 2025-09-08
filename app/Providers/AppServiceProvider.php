@@ -2,18 +2,17 @@
 
 namespace App\Providers;
 
-use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
-use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\ServiceProvider;
 
-class AuthServiceProvider extends ServiceProvider
+class AppServiceProvider extends ServiceProvider
 {
-  public function boot(): void
-{
-    Vite::prefetch(concurrency: 3);
-    Gate::define('access-admin', fn ($user) => (bool) $user->is_admin);
-}
+    public function register()
+    {
+        // empty or put your bindings here
+    }
 
-
-
-    
+    public function boot()
+    {
+        // empty or boot logic not dependent on Filament
+    }
 }

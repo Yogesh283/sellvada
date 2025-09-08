@@ -3,12 +3,16 @@ import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
 import { Link, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 export default function AuthenticatedLayout({ header, children }) {
   const user = usePage().props?.auth?.user ?? null;
   const [open, setOpen] = useState(false);           // mobile sheet
   const [panelOpen, setPanelOpen] = useState(false); // desktop panel
+
+  const [balance, setBalance] = useState(0.0);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   const is = (name) => (typeof route !== 'undefined' ? route().current(name) : false);
 
@@ -16,6 +20,30 @@ export default function AuthenticatedLayout({ header, children }) {
   const repurchaseHref = (() => {
     try { return route('repurchase.index'); } catch { return '/repurchase'; }
   })();
+
+  useEffect(() => {
+    // fetch the current balance if logged in
+    if (!user) return;
+    let mounted = true;
+    const fetchBalance = async () => {
+      try {
+        setBalanceLoading(true);
+        const res = await axios.get('/p2p/balance', { headers: { Accept: 'application/json' } });
+        if (!mounted) return;
+        if (res?.data?.balance !== undefined) {
+          setBalance(Number(res.data.balance));
+        }
+      } catch (err) {
+        console.error('Failed to fetch balance', err);
+      } finally {
+        if (mounted) setBalanceLoading(false);
+      }
+    };
+    fetchBalance();
+    // optional: refresh balance every 60s
+    const iv = setInterval(fetchBalance, 60_000);
+    return () => { mounted = false; clearInterval(iv); };
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gray-50 text-black">
@@ -36,14 +64,12 @@ export default function AuthenticatedLayout({ header, children }) {
                 <NavLink href={route('dashboard')} active={is('dashboard')} className="text-black">
                   Dashboard
                 </NavLink>
-              
-
 
                 <NavLink href="/" active={is('home')} className="text-black">
                   Products
                 </NavLink>
 
-                {/* ✅ Repurchase (new) */}
+                {/* Repurchase */}
                 <NavLink
                   href={repurchaseHref}
                   active={is('repurchase.index') || is('repurchase')}
@@ -66,6 +92,15 @@ export default function AuthenticatedLayout({ header, children }) {
                 >
                   Withdraw
                 </NavLink>
+
+                {/* P2P Transfer */}
+                <NavLink
+                  href={route('p2p.transfer.page')}
+                  active={is('p2p.transfer.page')}
+                  className="text-black"
+                >
+                  P2P Transfer
+                </NavLink>
               </div>
             </div>
 
@@ -81,7 +116,7 @@ export default function AuthenticatedLayout({ header, children }) {
                     aria-expanded={panelOpen}
                   >
                     {user.name}
-                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
                       <path
                         fillRule="evenodd"
                         d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
@@ -100,6 +135,10 @@ export default function AuthenticatedLayout({ header, children }) {
                         <div className="text-lg font-bold text-gray-900">{user.name}</div>
                         <div className="text-sm text-gray-500">{user.email}</div>
                         <div className="text-sm text-gray-600 mt-1">User ID: {user.id}</div>
+                        <div className="text-sm text-gray-700 mt-2">
+                          Available Balance:{' '}
+                          <span className="font-semibold">{balanceLoading ? '…' : Number(balance || 0).toFixed(2)}</span>
+                        </div>
                       </div>
 
                       <div className="space-y-1 px-2 pt-2 pb-3">
@@ -111,12 +150,12 @@ export default function AuthenticatedLayout({ header, children }) {
                           Products
                         </DesktopMenuLink>
 
-                        {/* Cart link (if you use it) */}
+                        {/* Cart (if used) */}
                         <DesktopMenuLink href="/card" active={is && is('card')} onClick={() => setPanelOpen(false)}>
                           Cart
                         </DesktopMenuLink>
 
-                        {/* ✅ Repurchase (new) */}
+                        {/* Repurchase */}
                         <DesktopMenuLink
                           href={repurchaseHref}
                           active={is('repurchase.index') || is('repurchase')}
@@ -130,6 +169,11 @@ export default function AuthenticatedLayout({ header, children }) {
                         </DesktopMenuLink>
                         <DesktopMenuLink href={route('wallet.withdraw')} active={is('wallet.withdraw')} onClick={() => setPanelOpen(false)}>
                           Withdrawal
+                        </DesktopMenuLink>
+
+                        {/* P2P Transfer */}
+                        <DesktopMenuLink href={route('p2p.transfer.page')} active={is('p2p.transfer.page')} onClick={() => setPanelOpen(false)}>
+                          P2P Transfer
                         </DesktopMenuLink>
                       </div>
 
@@ -174,7 +218,7 @@ export default function AuthenticatedLayout({ header, children }) {
               )}
             </div>
 
-            {/* ✅ Mobile: show username before hamburger */}
+            {/* Mobile: show username before hamburger */}
             {user && (
               <div className="sm:hidden text-sm font-medium text-gray-700 mr-2 truncate max-w-[120px]">
                 {user.name}
@@ -206,9 +250,18 @@ export default function AuthenticatedLayout({ header, children }) {
             <div className="px-4 py-4 border-b border-gray-200">
               {user && (
                 <>
-                  <div className="text-lg font-bold text-gray-900">{user.name}</div>
-                  <div className="text-sm text-gray-500">{user.email}</div>
-                  <div className="text-sm text-gray-600 mt-1">User ID: {user.id}</div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-lg font-bold text-gray-900">{user.name}</div>
+                      <div className="text-sm text-gray-500">{user.email}</div>
+                      <div className="text-sm text-gray-600 mt-1">User ID: {user.id}</div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-xs text-gray-500">Balance</div>
+                      <div className="text-sm font-semibold">{balanceLoading ? '…' : Number(balance || 0).toFixed(2)}</div>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -221,7 +274,7 @@ export default function AuthenticatedLayout({ header, children }) {
                 Products
               </ResponsiveNavLink>
 
-              {/* ✅ Repurchase (new) */}
+              {/* Repurchase */}
               <ResponsiveNavLink href={repurchaseHref} active={is('repurchase.index') || is('repurchase')}>
                 Repurchase
               </ResponsiveNavLink>
@@ -231,6 +284,11 @@ export default function AuthenticatedLayout({ header, children }) {
               </ResponsiveNavLink>
               <ResponsiveNavLink href={route('wallet.withdraw')} active={is('wallet.withdraw')}>
                 Withdrawal
+              </ResponsiveNavLink>
+
+              {/* P2P Transfer */}
+              <ResponsiveNavLink href={route('p2p.transfer.page')} active={is('p2p.transfer.page')}>
+                P2P Transfer
               </ResponsiveNavLink>
             </div>
 

@@ -1,0 +1,24 @@
+﻿<?php
+
+namespace App\Providers\Filament;
+
+use Illuminate\Support\ServiceProvider;
+
+class AdminPanelProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        // Filament dependency removed. Add your bindings here if needed.
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        // Keep boot logic only if it does not depend on Filament.
+    }
+}

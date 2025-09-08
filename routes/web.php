@@ -25,25 +25,15 @@ use App\Http\Controllers\BinarySummaryController;
   use App\Http\Controllers\TeamTreeController;
   use App\Http\Controllers\RepurchaseController;
 
-
-use App\Http\Controllers\Admin\UserReportController;
-
-Route::middleware(['auth', 'verified', 'admin'])
-    ->prefix('admin')
-    ->name('admin.')
-    ->group(function () {
-        Route::get('/users', fn () => Inertia::render('Admin/Users'))
-            ->name('users.index');
-    });
+use Filament\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\P2PTransferController;
 
 
-Route::middleware(['auth','verified','can:access-admin'])
-    ->prefix('admin')->name('admin.')
-    ->group(function () {
-        Route::get('/users', [\App\Http\Controllers\Admin\UserReportController::class, 'index'])
-            ->name('users.index');
-    });
-
+Route::middleware(['web','auth'])->group(function () {
+    Route::get('/p2p/transfer', [P2PTransferController::class, 'show'])->name('p2p.transfer.page');
+    Route::post('/p2p/transfer', [P2PTransferController::class, 'transfer'])->name('p2p.transfer');
+    Route::get('/p2p/balance', [P2PTransferController::class, 'balance'])->name('p2p.balance'); // fallback
+});
 
 
 Route::get('/', function () {
