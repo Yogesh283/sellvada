@@ -70,8 +70,8 @@ function StatCard({
 /**
  * CopyField - reusable copy-to-clipboard field
  * Props:
- *  - label: (string) optional left label (renders small text)
- *  - value: (string) value to show and copy
+ *  - label: (string) optional left label
+ *  - value: (string) value to show & copy
  */
 function CopyField({ label = null, value = "" }) {
   const [copied, setCopied] = useState(false);
@@ -79,7 +79,6 @@ function CopyField({ label = null, value = "" }) {
   const copy = async () => {
     try {
       if (!navigator?.clipboard) {
-        // Fallback: select + execCommand (rarely required in modern browsers)
         const tmp = document.createElement("textarea");
         tmp.value = value || "";
         document.body.appendChild(tmp);
@@ -90,7 +89,7 @@ function CopyField({ label = null, value = "" }) {
         await navigator.clipboard.writeText(value || "");
       }
       setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      setTimeout(() => setCopied(false), 1400);
     } catch (e) {
       console.error("Copy failed", e);
     }
@@ -125,7 +124,6 @@ export default function Dashboard() {
 
   const availableBalance = formatINR(props?.wallet_amount ?? 0);
   const payoutBalance = formatINR(props?.payout_wallet ?? 0);
-  const Today = formatINR(props?.today_profit ?? 0);
   const TotalTeam = props?.total_team ?? 0;
   const CurrentPlan = props?.current_plan ?? "-";
 
@@ -141,6 +139,10 @@ export default function Dashboard() {
     left_user = null,
     right_user = null,
     ref_link = "#",
+    // controller-provided summary props
+    businessSummary = { left: 0, right: 0 }, // lifetime
+    timewiseSales = { first_half: { left: 0, right: 0 }, second_half: { left: 0, right: 0 } },
+    carryTotals = { cf_left: 0, cf_right: 0 },
   } = props;
 
   const userName = user?.name ?? "-";
@@ -152,16 +154,9 @@ export default function Dashboard() {
   const rightTeamCount = Number(stats?.right_team ?? (children?.right ? 1 : 0));
   const directPV = Number(stats?.direct_pv ?? 0);
 
-  const businessSummary = props?.businessSummary ?? { left: 0, right: 0 };
-  const timewiseSales = props?.timewiseSales ?? {
-    first_half: { left: 0, right: 0 },
-    second_half: { left: 0, right: 0 },
-  };
-
-  // Debug log to inspect values arriving from backend
+  // minimal debug (client-side)
   if (typeof window !== "undefined") {
-    // keep minimal output
-    console.log("Dashboard props.businessSummary:", businessSummary, "timewiseSales:", timewiseSales);
+    console.log("businessSummary:", businessSummary, "timewiseSales:", timewiseSales, "carryTotals:", carryTotals);
   }
 
   return (
@@ -170,7 +165,7 @@ export default function Dashboard() {
     >
       <Head title="Dashboard" />
 
-      {/* Business Summary */}
+      {/* Consolidated Business Summary */}
       <div className="w-full rounded-lg bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden mb-6">
         <div className="bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-500 px-4 py-3 text-white font-semibold text-center">
           Business Summary
@@ -188,7 +183,7 @@ export default function Dashboard() {
             </thead>
 
             <tbody>
-              {/* Lifetime totals (from backend businessSummary) */}
+              {/* Lifetime totals (team-based from controller) */}
               <tr className="border-b hover:bg-slate-50">
                 <td className="py-3 px-4 font-medium text-slate-700">Lifetime (All-time)</td>
                 <td className="py-3 px-4 text-emerald-700 font-semibold">
@@ -198,9 +193,7 @@ export default function Dashboard() {
                   {formatINR(Number(businessSummary.right ?? 0))}
                 </td>
                 <td className="py-3 px-4 font-semibold">
-                  {formatINR(
-                    Number(businessSummary.left ?? 0) + Number(businessSummary.right ?? 0)
-                  )}
+                  {formatINR(Number(businessSummary.left ?? 0) + Number(businessSummary.right ?? 0))}
                 </td>
               </tr>
 
@@ -251,16 +244,27 @@ export default function Dashboard() {
                 </td>
                 <td className="py-3 px-4 font-semibold">
                   {formatINR(
-                    Number(timewiseSales.first_half?.left ?? 0) + Number(timewiseSales.second_half?.left ?? 0) +
-                    Number(timewiseSales.first_half?.right ?? 0) + Number(timewiseSales.second_half?.right ?? 0)
+                    Number(timewiseSales.first_half?.left ?? 0) +
+                    Number(timewiseSales.second_half?.left ?? 0) +
+                    Number(timewiseSales.first_half?.right ?? 0) +
+                    Number(timewiseSales.second_half?.right ?? 0)
                   )}
                 </td>
+              </tr>
+
+              {/* Carry Forward (Lifetime unmatched) */}
+              <tr className="border-t">
+                <td className="py-3 px-4 font-medium text-slate-700">Carry Forward (Lifetime unmatched)</td>
+                <td className="py-3 px-4 text-emerald-700 font-semibold">{formatINR(Number(carryTotals.cf_left ?? 0))}</td>
+                <td className="py-3 px-4 text-blue-700 font-semibold">{formatINR(Number(carryTotals.cf_right ?? 0))}</td>
+                <td className="py-3 px-4 font-semibold">{formatINR(Number(carryTotals.cf_left ?? 0) + Number(carryTotals.cf_right ?? 0))}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Main page body (welcome, cards, lists) */}
       <div className="mx-auto max-w-[1400px] px-3 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Welcome + referral box */}
         <div className="rounded-md bg-white shadow-sm ring-1 ring-slate-100">
@@ -275,7 +279,6 @@ export default function Dashboard() {
                     <td className="px-2 py-2 font-mono text-slate-900 sm:px-4">{userId}</td>
                   </tr>
 
-                  {/* Active Plan: using 'capitalize' class so 'diamond' -> 'Diamond' */}
                   <tr className="border-b">
                     <td className="px-2 py-2 font-medium text-slate-700 sm:px-4">Active Plan</td>
                     <td className="px-2 py-2 font-mono text-slate-900 sm:px-4 capitalize">
@@ -288,7 +291,6 @@ export default function Dashboard() {
                     <td className="px-2 py-2 sm:px-4">{createdAt}</td>
                   </tr>
 
-                  {/* Signup Link: use reusable CopyField */}
                   <tr className="border-b">
                     <td className="px-2 py-2 font-medium text-slate-700 sm:px-4">Signup Link</td>
                     <td className="px-2 py-2 sm:px-4">
@@ -296,32 +298,6 @@ export default function Dashboard() {
                     </td>
                   </tr>
 
-                  <tr>
-                    <td className="px-2 py-2 font-medium text-slate-700 sm:px-4">Quick Links</td>
-                    <td className="px-2 py-2 sm:px-4">
-                      <div className="flex flex-wrap justify-center gap-2">
-                        <a
-                          href="/profile"
-                          className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
-                        >
-                          View Profile
-                        </a>
-                        <a
-                          href="/team"
-                          className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
-                        >
-                          My Team
-                        </a>
-                        <a
-                          href="/team/tree"
-                          className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
-                          title="View Team Tree"
-                        >
-                          Tree
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
                 </tbody>
               </table>
             </div>
@@ -340,57 +316,7 @@ export default function Dashboard() {
           <StatCard title="MY TEAM" value={TotalTeam} icon="👥" actionHref="/team" gradient={G.lime} />
         </div>
 
-        {/* Accounts/Team counters */}
-        <div className="rounded-lg shadow-sm ring-1 ring-slate-100 overflow-hidden">
-          <div className={`${G.barEmerald} px-4 py-3 text-white text-center font-semibold`}>
-            <span className="opacity-95">“ Team Counters ”</span>
-          </div>
-          <div className="grid gap-4 p-4 md:grid-cols-2">
-            <div className="rounded-lg border border-slate-200 bg-white">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">
-                Account details
-              </div>
-              <div className="p-4">
-                <dl className="grid grid-cols-2 gap-3 text-sm">
-                  <dt className="text-slate-500">Package Name</dt>
-                  <dd className="text-slate-900 font-medium">{user?.package_name ?? "-"}</dd>
-                  <dt className="text-slate-500">Register Date & Time</dt>
-                  <dd className="text-slate-900 font-medium">{createdAt}</dd>
-                  <dt className="text-slate-500">Sponsor</dt>
-                  <dd className="text-slate-900 font-medium">
-                    {sponsor ? `${sponsor?.name ?? "-"} (#${sponsor?.id ?? "-"})` : "-"}
-                  </dd>
-                  <dt className="text-slate-500">Last Login</dt>
-                  <dd className="text-slate-900 font-medium">{formatDT(user?.last_login_at)}</dd>
-                </dl>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-white">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Team Count</div>
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2">
-                  <span className="text-slate-700">Direct Referral Count</span>
-                  <span className="font-bold text-emerald-700">{directReferrals}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2">
-                  <span className="text-slate-700">Direct PV Count</span>
-                  <span className="font-bold text-emerald-700">{directPV}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2">
-                  <span className="text-slate-700">Left Team</span>
-                  <span className="font-bold text-emerald-700">{leftTeamCount}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2">
-                  <span className="text-slate-700">Right Team</span>
-                  <span className="font-bold text-emerald-700">{rightTeamCount}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Purchases (Your own) */}
+        {/* Recent Purchases */}
         <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">
           <div className={`${G.barTeal} px-4 py-3 text-white font-semibold`}>Recent Purchases</div>
           <div className="p-4">
@@ -427,7 +353,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Team Purchases (any leg) */}
+        {/* Team Purchases (combined) */}
         <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">
           <div className={`${G.barOrange} px-4 py-3 text-white font-semibold`}>
             Team Purchases (Your Left/Right)
@@ -474,7 +400,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Split tables: Left / Right */}
+        {/* Split tables: Left / Right recent purchases */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Left Leg */}
           <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">
@@ -559,7 +485,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Bottom banner (colored) */}
+        {/* Bottom banner */}
         <div className={`${G.barEmerald} rounded-lg py-8 text-center text-white shadow-md`}>
           <div className="text-2xl font-bold">“ News ”</div>
         </div>

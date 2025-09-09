@@ -43,9 +43,8 @@ class DashboardController extends Controller
         $teamLeftSells = collect();
         $teamRightSells = collect();
 
-        if ($hasReferral) {
-            // CTE: root children keep their position as root_leg, propagate to descendants
-            $teamCte = "
+        // CTE string reused at many places
+        $teamCte = "
 WITH RECURSIVE team AS (
   SELECT id, referral_id, refer_by, position,
          UPPER(COALESCE(position,'NA')) AS root_leg
@@ -59,6 +58,8 @@ WITH RECURSIVE team AS (
   JOIN team t ON u.refer_by = t.referral_id
 )
 ";
+
+        if ($hasReferral) {
             // team sells (all legs) - recent 10
             $teamSellsSql = $teamCte . "
 SELECT
@@ -120,18 +121,13 @@ ORDER BY s.id DESC
 LIMIT 10
 ";
             $teamRightSells = collect(DB::select($teamRightSql, [$myReferralId]));
-        } else {
-            // keep empty collections (or you can keep existing logic using sponsor_id)
-            $teamSells = collect();
-            $teamLeftSells = collect();
-            $teamRightSells = collect();
         }
 
         // Immediate left/right users (if set)
         $leftUser  = $user->leftChild ? $user->leftChild->only(['id','name','email'])   : null;
         $rightUser = $user->rightChild ? $user->rightChild->only(['id','name','email']) : null;
 
-        // Referral link activation check (same as before)
+        // Referral link activation check
         $Ref = DB::table('sell')->where('buyer_id', $user->id)->where('status', 'paid')->orderByDesc('id')->value('type');
 
         if ($Ref) {
@@ -180,30 +176,110 @@ LIMIT 10
             $totalTeam = (int) ($row->cnt ?? 0);
         }
 
-        // Timewise Sales (12 AM - 12 PM & 12 PM - 12 AM) - using sponsor_id & leg (kept as before)
-        $today = Carbon::today();
+        // ---------------- Business (Lifetime + Today First/Second Half) ----------------
+        $businessSummary = ['left' => 0.0, 'right' => 0.0];
+        $timewiseSales   = [
+            'first_half'  => ['left' => 0.0, 'right' => 0.0],
+            'second_half' => ['left' => 0.0, 'right' => 0.0],
+        ];
 
-        // First Half (12 AM - 12 PM)
-        $firstHalfLeft = DB::table('sell')
-            ->where('sponsor_id', $user->id)->where('leg', 'L')->where('status', 'paid')
-            ->whereBetween('created_at', [$today->copy()->setTime(0,0,0), $today->copy()->setTime(11,59,59)])
-            ->sum('amount');
+        if ($hasReferral) {
+            // Lifetime (team-based)
+            $leftRow = DB::selectOne($teamCte . "
+                SELECT COALESCE(SUM(s.amount),0) AS amt
+                FROM team t
+                JOIN sell s ON s.buyer_id = t.id
+                WHERE t.root_leg = 'L' AND s.status = 'paid'
+            ", [$myReferralId]);
 
-        $firstHalfRight = DB::table('sell')
-            ->where('sponsor_id', $user->id)->where('leg', 'R')->where('status', 'paid')
-            ->whereBetween('created_at', [$today->copy()->setTime(0,0,0), $today->copy()->setTime(11,59,59)])
-            ->sum('amount');
+            $rightRow = DB::selectOne($teamCte . "
+                SELECT COALESCE(SUM(s.amount),0) AS amt
+                FROM team t
+                JOIN sell s ON s.buyer_id = t.id
+                WHERE t.root_leg = 'R' AND s.status = 'paid'
+            ", [$myReferralId]);
 
-        // Second Half (12 PM - 12 AM)
-        $secondHalfLeft = DB::table('sell')
-            ->where('sponsor_id', $user->id)->where('leg', 'L')->where('status', 'paid')
-            ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
-            ->sum('amount');
+            $businessSummary['left']  = (float) ($leftRow->amt ?? 0);
+            $businessSummary['right'] = (float) ($rightRow->amt ?? 0);
 
-        $secondHalfRight = DB::table('sell')
-            ->where('sponsor_id', $user->id)->where('leg', 'R')->where('status', 'paid')
-            ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
-            ->sum('amount');
+            // Today windows
+            $today = Carbon::today();
+            $firstStart  = $today->copy()->setTime(0,0,0)->format('Y-m-d H:i:s');
+            $firstEnd    = $today->copy()->setTime(11,59,59)->format('Y-m-d H:i:s');
+            $secondStart = $today->copy()->setTime(12,0,0)->format('Y-m-d H:i:s');
+            $secondEnd   = $today->copy()->setTime(23,59,59)->format('Y-m-d H:i:s');
+
+            // First half (team-based)
+            $fhLeft = DB::selectOne($teamCte . "
+                SELECT COALESCE(SUM(s.amount),0) AS amt
+                FROM team t
+                JOIN sell s ON s.buyer_id = t.id
+                WHERE t.root_leg = 'L' AND s.status = 'paid'
+                  AND s.created_at BETWEEN ? AND ?
+            ", [$myReferralId, $firstStart, $firstEnd]);
+
+            $fhRight = DB::selectOne($teamCte . "
+                SELECT COALESCE(SUM(s.amount),0) AS amt
+                FROM team t
+                JOIN sell s ON s.buyer_id = t.id
+                WHERE t.root_leg = 'R' AND s.status = 'paid'
+                  AND s.created_at BETWEEN ? AND ?
+            ", [$myReferralId, $firstStart, $firstEnd]);
+
+            // Second half (team-based)
+            $shLeft = DB::selectOne($teamCte . "
+                SELECT COALESCE(SUM(s.amount),0) AS amt
+                FROM team t
+                JOIN sell s ON s.buyer_id = t.id
+                WHERE t.root_leg = 'L' AND s.status = 'paid'
+                  AND s.created_at BETWEEN ? AND ?
+            ", [$myReferralId, $secondStart, $secondEnd]);
+
+            $shRight = DB::selectOne($teamCte . "
+                SELECT COALESCE(SUM(s.amount),0) AS amt
+                FROM team t
+                JOIN sell s ON s.buyer_id = t.id
+                WHERE t.root_leg = 'R' AND s.status = 'paid'
+                  AND s.created_at BETWEEN ? AND ?
+            ", [$myReferralId, $secondStart, $secondEnd]);
+
+            $timewiseSales['first_half']['left']   = (float) ($fhLeft->amt ?? 0);
+            $timewiseSales['first_half']['right']  = (float) ($fhRight->amt ?? 0);
+            $timewiseSales['second_half']['left']  = (float) ($shLeft->amt ?? 0);
+            $timewiseSales['second_half']['right'] = (float) ($shRight->amt ?? 0);
+
+        } else {
+            // Fallback to direct sponsor sums if no referral tree (kept from older behaviour)
+            $businessSummary['left']  = DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'L')->where('status', 'paid')->sum('amount');
+            $businessSummary['right'] = DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'R')->where('status', 'paid')->sum('amount');
+
+            $today = Carbon::today();
+            $timewiseSales['first_half']['left'] = DB::table('sell')
+                ->where('sponsor_id', $user->id)->where('leg','L')->where('status','paid')
+                ->whereBetween('created_at', [$today->copy()->setTime(0,0,0), $today->copy()->setTime(11,59,59)])
+                ->sum('amount');
+
+            $timewiseSales['first_half']['right'] = DB::table('sell')
+                ->where('sponsor_id', $user->id)->where('leg','R')->where('status','paid')
+                ->whereBetween('created_at', [$today->copy()->setTime(0,0,0), $today->copy()->setTime(11,59,59)])
+                ->sum('amount');
+
+            $timewiseSales['second_half']['left'] = DB::table('sell')
+                ->where('sponsor_id', $user->id)->where('leg','L')->where('status','paid')
+                ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
+                ->sum('amount');
+
+            $timewiseSales['second_half']['right'] = DB::table('sell')
+                ->where('sponsor_id', $user->id)->where('leg','R')->where('status','paid')
+                ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
+                ->sum('amount');
+        }
+
+        // Carry Forward (lifetime unmatched)
+        $carryTotals = [
+            'cf_left'  => max($businessSummary['left']  - $businessSummary['right'], 0),
+            'cf_right' => max($businessSummary['right'] - $businessSummary['left'], 0),
+        ];
 
         // Full user data (mask sensitive fields)
         $userAll = [
@@ -227,57 +303,6 @@ LIMIT 10
 
         $userSafe = Arr::except($raw, ['password','remember_token','Password_plain']);
         $plan = DB::table('sell')->where('buyer_id', $user->id)->where('status', 'paid')->orderByDesc('id')->value('type');
-
-        // Left & Right business from sell table (for logged-in user) using propagated root_leg
-        $businessSummary = ['left' => 0.0, 'right' => 0.0];
-
-        if ($hasReferral) {
-            // Sum paid amount where root_leg = 'L'
-            $leftRow = DB::selectOne("
-                WITH RECURSIVE team AS (
-                  SELECT id, referral_id, refer_by, position,
-                         UPPER(COALESCE(position,'NA')) AS root_leg
-                  FROM users
-                  WHERE refer_by = ?
-
-                  UNION ALL
-
-                  SELECT u.id, u.referral_id, u.refer_by, u.position, t.root_leg
-                  FROM users u
-                  JOIN team t ON u.refer_by = t.referral_id
-                )
-                SELECT COALESCE(SUM(s.amount),0) AS amt
-                FROM team t
-                JOIN sell s ON s.buyer_id = t.id
-                WHERE t.root_leg = 'L' AND s.status = 'paid'
-            ", [$myReferralId]);
-
-            $rightRow = DB::selectOne("
-                WITH RECURSIVE team AS (
-                  SELECT id, referral_id, refer_by, position,
-                         UPPER(COALESCE(position,'NA')) AS root_leg
-                  FROM users
-                  WHERE refer_by = ?
-
-                  UNION ALL
-
-                  SELECT u.id, u.referral_id, u.refer_by, u.position, t.root_leg
-                  FROM users u
-                  JOIN team t ON u.refer_by = t.referral_id
-                )
-                SELECT COALESCE(SUM(s.amount),0) AS amt
-                FROM team t
-                JOIN sell s ON s.buyer_id = t.id
-                WHERE t.root_leg = 'R' AND s.status = 'paid'
-            ", [$myReferralId]);
-
-            $businessSummary['left']  = (float) ($leftRow->amt ?? 0);
-            $businessSummary['right'] = (float) ($rightRow->amt ?? 0);
-        } else {
-            // fallback: keep direct sponsor-based sums (same as original behaviour)
-            $businessSummary['left']  = DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'L')->where('status', 'paid')->sum('amount');
-            $businessSummary['right'] = DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'R')->where('status', 'paid')->sum('amount');
-        }
 
         // Add in props
         return Inertia::render('Dashboard', [
@@ -305,12 +330,10 @@ LIMIT 10
             'right_user'       => $rightUser,
             'ref_link'         => $refLink,
 
-            // 👉 New: Left & Right Business (propagated)
-            'businessSummary'  => $businessSummary,
-            'timewiseSales'    => [
-                'first_half'  => ['left' => $firstHalfLeft, 'right' => $firstHalfRight],
-                'second_half' => ['left' => $secondHalfLeft, 'right' => $secondHalfRight],
-            ],
+            // Summary tables for UI
+            'businessSummary'  => $businessSummary,     // lifetime (team-based)
+            'timewiseSales'    => $timewiseSales,       // first_half, second_half (team-based)
+            'carryTotals'      => $carryTotals,         // cf_left, cf_right
         ]);
     }
 }
