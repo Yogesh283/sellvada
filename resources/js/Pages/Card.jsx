@@ -1,7 +1,8 @@
+// resources/js/Pages/Cart.jsx  (or wherever your Cart component lives)
 import React, { useMemo, useState, useEffect } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, router, usePage } from "@inertiajs/react";
-
+import { Head, usePage } from "@inertiajs/react";
+import axios from "axios";
 
 const formatINR = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n || 0));
@@ -34,7 +35,7 @@ function QtyButton({ onClick, children, disabled, "aria-label": ariaLabel }) {
 }
 
 function CartRow({ item, onInc, onDec, onRemove }) {
-  const lineTotal = Number(item.price) * Number(item.qty);
+  const lineTotal = Number(item.price) * Number(item.qty || 0);
   return (
     <div className="grid grid-cols-[64px_1fr_auto] sm:grid-cols-[90px_1fr_auto_auto] gap-3 sm:gap-4 items-center border-b border-slate-100 py-3 sm:py-4">
       <div className="h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-md bg-slate-100">
@@ -59,7 +60,7 @@ function CartRow({ item, onInc, onDec, onRemove }) {
   );
 }
 
-export default function Card({ items: serverItems = null }) { // 🔁 shipping prop हटा दिया
+export default function Card({ items: serverItems = null }) {
   const { walletBalance = 0, defaultAddress = null } = usePage().props;
 
   const [items, setItems] = useState(serverItems || []);
@@ -72,6 +73,8 @@ export default function Card({ items: serverItems = null }) { // 🔁 shipping p
     if (!serverItems) {
       const saved = loadCart();
       if (saved.length) setItems(saved);
+      // debug: you can temporarily add a demo item if you need to test
+      // else setItems([{ id: 1, name: "Demo product", price: 100, qty: 1, img: "/image/11111.png" }]);
     } else {
       saveCart(serverItems);
     }
@@ -84,59 +87,103 @@ export default function Card({ items: serverItems = null }) { // 🔁 shipping p
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [processing, setProcessing] = useState(false);
 
-  // 👉 Totals: सिर्फ MRP - Coupon, कोई tax/shipping/extra नहीं
+  // Confirmation & Success modal state
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [orderNo, setOrderNo] = useState(null);
+
+  // Totals
   const subTotal = useMemo(
-    () => items.reduce((s, it) => s + Number(it.price) * Number(it.qty), 0),
+    () => items.reduce((s, it) => s + Number(it.price) * Number(it.qty || 0), 0),
     [items]
   );
   const discount = useMemo(
     () => (!appliedCoupon ? 0 : appliedCoupon === "FLAT10" ? Math.round(subTotal * 0.1) : 0),
     [appliedCoupon, subTotal]
   );
-  const grand = Math.max(0, subTotal - discount); // ✅ final payable
+  const grand = Math.max(0, subTotal - discount);
 
-  const inc = (id) => setItems((arr) => arr.map((it) => (it.id === id ? { ...it, qty: it.qty + 1 } : it)));
+  const inc = (id) => setItems((arr) => arr.map((it) => (it.id === id ? { ...it, qty: (it.qty || 0) + 1 } : it)));
   const dec = (id) => setItems((arr) => arr.map((it) => (it.id === id && it.qty > 1 ? { ...it, qty: it.qty - 1 } : it)));
   const removeItem = (id) => setItems((arr) => arr.filter((it) => it.id !== id));
 
   const applyCoupon = (e) => { e.preventDefault(); setAppliedCoupon(coupon.trim().toUpperCase() || null); };
   const clearCartEverywhere = () => { setItems([]); saveCart([]); setAppliedCoupon(null); setCoupon(""); };
 
-  const onCheckout = (e) => {
-    e.preventDefault();
-    if (!items.length || processing) return;
+  // when user clicks checkout button -> show confirm modal
+  const handleCheckoutClick = (e) => {
+    e?.preventDefault();
+    if (!items.length) {
+      showError("Your cart is empty. Add products before checkout.");
+      return;
+    }
+    if (processing) return;
+    setShowConfirm(true);
+  };
+
+  // actual checkout after user confirms in modal (uses axios to read JSON response)
+  const confirmCheckout = async () => {
+    if (!items.length) {
+      setShowConfirm(false);
+      showError("Your cart is empty. Add products before checkout.");
+      return;
+    }
+    if (processing) return;
 
     if (!defaultAddress) {
+      setShowConfirm(false);
       showError("Please add a shipping address before checkout.");
       return;
     }
     if (walletBalance < Number(grand)) {
+      setShowConfirm(false);
       showError(`Insufficient wallet balance to pay ${formatINR(grand)}.`);
       return;
     }
 
-    router.post('/checkout', {
-      items,
-      coupon: appliedCoupon,
-      shipping: 0   // 👈 या जो भी shipping amount है
-    }, {
-      onStart: () => setProcessing(true),
-      onFinish: () => setProcessing(false),
-      onSuccess: () => {
-        showSuccess('Order placed successfully!');
+    try {
+      setProcessing(true);
+
+      const payload = {
+        items,
+        coupon: appliedCoupon,
+        shipping: 0,
+      };
+
+      const resp = await axios.post('/checkout', payload);
+
+      if (resp?.data?.success) {
+        const on = resp.data.order_no || null;
+        setOrderNo(on);
         clearCartEverywhere();
-      },
-      onError: (errors) => {
-        if (errors?.wallet) {
-          showError(errors.wallet);
-        } else if (typeof errors === "object" && Object.keys(errors).length) {
-          const firstError = Object.values(errors)[0];
-          showError(firstError);
-        } else {
-          showError('Checkout failed. Please try again.');
-        }
-      },
-    });
+        setShowConfirm(false);
+        setShowSuccessModal(true);
+        showSuccess(resp.data.message || 'Order placed successfully!');
+      } else {
+        showError((resp && resp.data && resp.data.message) || 'Checkout failed.');
+      }
+    } catch (err) {
+      console.error('checkout error', err);
+      if (err.response && err.response.status === 422) {
+        const errors = err.response.data?.errors || err.response.data || {};
+        if (errors?.wallet) showError(errors.wallet[0] || errors.wallet);
+        else if (typeof errors === "object" && Object.keys(errors).length) {
+          const first = Object.values(errors)[0];
+          showError(Array.isArray(first) ? first[0] : first);
+        } else showError('Validation failed. Please check your input.');
+      } else if (err.response && err.response.data && err.response.data.message) {
+        showError(err.response.data.message);
+      } else {
+        showError('Checkout failed. Please try again.');
+      }
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const cancelConfirm = () => {
+    if (processing) return;
+    setShowConfirm(false);
   };
 
   return (
@@ -203,9 +250,9 @@ export default function Card({ items: serverItems = null }) { // 🔁 shipping p
                     <CartRow
                       key={it.id}
                       item={it}
-                      onInc={() => setItems(arr => arr.map(x => x.id === it.id ? { ...x, qty: x.qty + 1 } : x))}
-                      onDec={() => setItems(arr => arr.map(x => (x.id === it.id && x.qty > 1) ? { ...x, qty: x.qty - 1 } : x))}
-                      onRemove={() => setItems(arr => arr.filter(x => x.id !== it.id))}
+                      onInc={() => inc(it.id)}
+                      onDec={() => dec(it.id)}
+                      onRemove={() => removeItem(it.id)}
                     />
                   ))}
                 </div>
@@ -266,7 +313,7 @@ export default function Card({ items: serverItems = null }) { // 🔁 shipping p
 
             <div className="mt-4 sm:mt-5 grid gap-2 sm:gap-3">
               <button
-                onClick={onCheckout}
+                onClick={handleCheckoutClick}
                 disabled={processing || items.length === 0}
                 className="w-full inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700 disabled:opacity-60"
                 type="button"
@@ -296,7 +343,7 @@ export default function Card({ items: serverItems = null }) { // 🔁 shipping p
                 <div className="font-semibold text-slate-900">{formatINR(grand)}</div>
               </div>
               <button
-                onClick={onCheckout}
+                onClick={handleCheckoutClick}
                 disabled={processing || items.length === 0}
                 className="inline-flex flex-1 justify-center rounded-lg bg-sky-600 px-4 py-2.5 text-white font-semibold hover:bg-sky-700 disabled:opacity-60"
                 type="button"
@@ -307,6 +354,56 @@ export default function Card({ items: serverItems = null }) { // 🔁 shipping p
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal (OK=blue, Cancel=gray) */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => { if (!processing) cancelConfirm(); }}
+          />
+          <div className="relative z-50 w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+            <h3 className="text-2xl font-semibold text-slate-900 text-center">Confirm this action?</h3>
+            <p className="mt-4 text-center text-slate-700">Are you sure you want to place order for <strong>{formatINR(grand)}</strong>?</p>
+
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <button
+                onClick={cancelConfirm}
+                disabled={processing}
+                className="px-6 py-2 rounded-md bg-slate-400 text-white font-medium hover:opacity-90"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmCheckout}
+                disabled={processing}
+                className="px-6 py-2 rounded-md bg-blue-500 text-white font-medium hover:bg-blue-600"
+              >
+                {processing ? 'Processing...' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowSuccessModal(false)} />
+          <div className="relative z-50 w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+            <h3 className="text-lg font-semibold text-emerald-700">Order Confirmed</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Your order has been placed successfully.
+              {orderNo && <span className="block mt-2 font-medium">Order No: {orderNo}</span>}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <a href="/orders" className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700">View Orders</a>
+              <button onClick={() => setShowSuccessModal(false)} className="rounded-lg border px-3 py-2 text-sm font-medium">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

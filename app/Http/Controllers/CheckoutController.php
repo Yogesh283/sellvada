@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Sell;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -42,8 +41,7 @@ class CheckoutController extends Controller
         $tax      = round($taxable * 0.0, 2);
         $extra    = round($taxable * 0.0, 2);
         $shipping = count($data['items']) ? (float)$data['shipping'] : 0.0;
-        $grand    = $taxable + $tax + $extra + $shipping;
-
+        $grand    = round($taxable + $tax + $extra + $shipping, 2);
 
         // 3) Resolve sponsor/upline and leg (for sell rows)
         $sponsorId = $this->resolveSponsorId($user);
@@ -51,54 +49,75 @@ class CheckoutController extends Controller
 
         $orderNo = 'ORD-'.Str::upper(Str::random(8));
 
-        // 4) Transaction: lock wallet, check balance, deduct, create sell rows
-        DB::transaction(function () use ($user, $data, $grand, $sponsorId, $leg, $coupon, $tax, $orderNo) {
+        try {
+            DB::beginTransaction();
 
-            // Lock the wallet row
+            // Ensure wallet row exists
             $walletRow = DB::table('wallet')
                 ->where('user_id', $user->id)
-                ->lockForUpdate()
+                ->where('type', 'main')
                 ->first();
 
-            $current = $walletRow->amount ?? 0.0;
-            if ($current < $grand) {
-                throw ValidationException::withMessages([
-                    'wallet' => 'Insufficient wallet balance.',
-                ]);
-            }
-
-            // Deduct
-            DB::table('wallet')
-                ->where('user_id', $user->id)
-                ->update([
-                    'amount'     => DB::raw('amount - '.number_format($grand, 2, '.', '')),
+            if (!$walletRow) {
+                // create wallet row with zero balance to avoid null access
+                DB::table('wallet')->insert([
+                    'user_id'    => $user->id,
+                    'type'       => 'main',
+                    'amount'     => 0.00,
+                    'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+                $current = 0.0;
+            } else {
+                $current = (float)$walletRow->amount;
+            }
 
-            // Create sell rows
+            // quick check
+            if ($current < $grand) {
+                DB::rollBack();
+                throw ValidationException::withMessages(['wallet' => 'Insufficient wallet balance.']);
+            }
+
+            // Atomic decrement to deduct amount (avoid race conditions)
+            $updated = DB::table('wallet')
+                ->where('user_id', $user->id)
+                ->where('type', 'main')
+                ->where('amount', '>=', $grand)
+                ->decrement('amount', $grand);
+
+            if (!$updated) {
+                // someone else may have spent concurrently; return proper validation message
+                DB::rollBack();
+                $balance = (float)(DB::table('wallet')->where('user_id', $user->id)->where('type','main')->value('amount') ?? 0);
+                throw ValidationException::withMessages(['wallet' => 'Insufficient wallet balance. Available ₹'.number_format($balance,2)]);
+            }
+
+            // Create sell rows (one row per item)
             foreach ($data['items'] as $it) {
                 $type = null;
                 if (!empty($it['type'])) {
                     $type = strtolower(trim($it['type']));
                 } elseif (preg_match('/\(([^)]+)\)\s*$/', (string)$it['name'], $m)) {
-                    $type = strtolower(trim($m[1])); // "Product (Silver)" -> "silver"
+                    $type = strtolower(trim($m[1]));
                 }
 
                 $lineAmount = round((float)$it['price'] * (int)$it['qty'], 2);
 
+                // IMPORTANT: ensure Sell::$fillable includes these fields and
+                // Sell has `protected $casts = ['details' => 'array'];`
                 Sell::create([
                     'buyer_id'          => $user->id,
-                    'sponsor_id'        => $sponsorId,        // upline id
-                    'income_to_user_id' => $sponsorId,        // same for direct income (if any)
+                    'sponsor_id'        => $sponsorId,
+                    'income_to_user_id' => $sponsorId,
                     'leg'               => $leg,
                     'product'           => $it['name'],
                     'amount'            => $lineAmount,
-                    'income'            => 0.0,               // no commission at checkout time
-                    'income_type'       => 'DIRECT',          // keep uppercase to avoid enum truncation
+                    'income'            => 0.0,
+                    'income_type'       => 'DIRECT',
                     'level'             => null,
                     'order_no'          => $orderNo,
                     'status'            => 'paid',
-                    'type'              => $type,             // silver/gold/diamond/repurchase
+                    'type'              => $type,
                     'details'           => [
                         'qty'      => (int)$it['qty'],
                         'price'    => (float)$it['price'],
@@ -110,12 +129,46 @@ class CheckoutController extends Controller
                     ],
                 ]);
             }
-        });
 
-        return back()->with('success', 'Order placed & wallet debited successfully!');
+            DB::commit();
+
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()->with('success', 'Order placed & wallet debited successfully!');
+            }
+
+            return response()->json([
+                'success'  => true,
+                'order_no' => $orderNo,
+                'message'  => 'Order placed & wallet debited successfully!',
+                'grand'    => $grand,
+            ], 200);
+        } catch (ValidationException $ve) {
+            // let laravel handle 422 response for Inertia/Ajax
+            throw $ve;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('Checkout error: '.$e->getMessage(), [
+                'user_id'   => $user->id ?? null,
+                'order_no'  => $orderNo ?? null,
+                'exception' => $e,
+            ]);
+
+            $msg = config('app.debug') ? $e->getMessage() : 'Server error while processing checkout. Please try again later.';
+
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()->withErrors(['server' => $msg]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => $msg,
+            ], 500);
+        }
     }
 
-    /** Find sponsor id from user.sponsor_id or refer_by (referral_id / code / email / numeric id) */
+    /**
+     * Resolve sponsor ID for a user from various fallbacks and persist if found.
+     */
     private function resolveSponsorId(User $user): ?int
     {
         if ($user->sponsor_id) return (int)$user->sponsor_id;
@@ -135,6 +188,7 @@ class CheckoutController extends Controller
             $user->save();
             return (int)$s->id;
         }
+
         return null;
     }
 }

@@ -59,9 +59,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/card', fn() => Inertia::render('Card'))->name('card');
 });
 
-Route::middleware('auth')->group(function () {
-    Route::post('/checkout', [SellController::class, 'checkout'])->name('sell.checkout');
-});
+// Route::middleware('auth')->group(function () {
+//     Route::post('/checkout', [SellController::class, 'checkout'])->name('sell.checkout');
+// });
+
+Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->middleware('auth');
+
 
 
 Route::middleware(['auth','verified'])->get('/team', [TeamController::class, 'index'])->name('team.index');
@@ -159,9 +162,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/repurchase', [RepurchaseController::class, 'index'])
         ->name('repurchase.index');
 
-    Route::post('/repurchase/checkout', [RepurchaseController::class, 'checkout'])
-        ->name('repurchase.checkout');
+    // Route::post('/repurchase/checkout', [RepurchaseController::class, 'checkout'])
+    //     ->name('repurchase.checkout');
 });
+
+
+Route::post('/repurchase/checkout', [CheckoutController::class, 'store'])->name('repurchase.checkout');
+
 
 
 use App\Models\User; // 👈 Laravel 8+

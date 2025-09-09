@@ -66,7 +66,6 @@ const CATALOG = {
   },
 };
 
-
 const slides = [
   { img: "/image/Web Long Banner1.png" },
   { img: "/image/Web Long Banner2.png" },
@@ -82,16 +81,14 @@ function ImageSlider() {
       modules={[Autoplay]}
       autoplay={{ delay: 3500, disableOnInteraction: false }}
       loop
-      className="w-full 
-        h-[180px] sm:h-[250px] md:h-[380px] lg:h-[460px] 
-        rounded-2xl overflow-hidden shadow-xl bg-white"
+      className="w-full aspect-[16/6] rounded-2xl overflow-hidden shadow-xl bg-white"
     >
       {slides.map((item, i) => (
         <SwiperSlide key={i} className="flex items-center justify-center">
           <img
             src={item.img}
             alt={`slide-${i}`}
-            className="w-full h-full object-cover"
+            className="max-w-full max-h-full object-contain"
           />
         </SwiperSlide>
       ))}

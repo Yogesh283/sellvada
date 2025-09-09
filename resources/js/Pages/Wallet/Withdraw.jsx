@@ -1,13 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Head, useForm } from "@inertiajs/react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 
-function inr(n){ try{ return new Intl.NumberFormat("en-IN",{maximumFractionDigits:2}).format(Number(n||0)); }catch{return n;} }
+function inr(n) {
+  try {
+    return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(Number(n || 0));
+  } catch {
+    return n;
+  }
+}
 
-export default function Withdraw({ balance, rows, methods, minAmt = 200, chargePct = 0, chargeFix = 0 }) {
+export default function Withdraw({ balance: initialBalance, rows, methods, minAmt = 200, chargePct = 0, chargeFix = 0 }) {
+  // local balance state so we can optimistically deduct
+  const [localBalance, setLocalBalance] = useState(Number(initialBalance || 0));
+  const [method, setMethod] = useState(methods?.[0] || "UPI");
+  const [clientError, setClientError] = useState(""); // for client-side messages / restore info
 
-    const [method, setMethod] = useState(methods?.[0] || "UPI");
-  const { data, setData, post, processing, reset, errors } = useForm({
+  const { data, setData, post, processing, reset, errors, clearErrors } = useForm({
     amount: "",
     method: method,
     upi_id: "",
@@ -17,7 +26,20 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
     ifsc: "",
   });
 
-  const onMethod = (m) => { setMethod(m); setData("method", m); };
+  // keep form method in sync when method changes
+  useEffect(() => {
+    setData("method", method);
+  }, [method, setData]);
+
+  // Update local balance if prop changes externally
+  useEffect(() => {
+    setLocalBalance(Number(initialBalance || 0));
+  }, [initialBalance]);
+
+  const onMethod = (m) => { 
+    setMethod(m); 
+    setData("method", m); 
+  };
 
   const estCharge = () => {
     const amt = Number(data.amount || 0);
@@ -25,10 +47,59 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
   };
   const estNet = () => Math.max(0, Number(data.amount || 0) - estCharge());
 
+  const validateBeforeSubmit = () => {
+    setClientError("");
+    clearErrors();
+    const amt = Number(data.amount || 0);
+
+    if (!amt || amt <= 0) {
+      setClientError("Please enter a valid amount.");
+      return false;
+    }
+    if (amt < Number(minAmt || 0)) {
+      setClientError(`Minimum withdrawal amount is ₹${inr(minAmt)}.`);
+      return false;
+    }
+    if (amt > localBalance) {
+      setClientError("Insufficient wallet balance for this withdrawal.");
+      return false;
+    }
+    // additional client-side checks (optional)
+    return true;
+  };
+
   const submit = (e) => {
     e.preventDefault();
+    // client-side validation
+    if (!validateBeforeSubmit()) return;
+
+    const amt = Number(data.amount || 0);
+    const prevBalance = localBalance;
+
+    // Optimistic update: deduct immediately from UI
+    setLocalBalance((b) => Number((b - amt).toFixed(2)));
+
+    // send request
     post(route("wallet.withdraw.store"), {
-      onSuccess: () => reset(),
+      onSuccess: () => {
+        // success: keep deduction; reset the form fields
+        reset();
+        setClientError("");
+      },
+      onError: (serverErrs) => {
+        // restore previous balance on error
+        setLocalBalance(prevBalance);
+        // show server validation errors if provided; use the first few as client error too
+        const list = Object.values(serverErrs || {});
+        if (list.length) {
+          setClientError(Array.isArray(list) ? list.slice(0,3).join(" | ") : String(list));
+        } else {
+          setClientError("Server error occurred. Please try again.");
+        }
+      },
+      onFinish: () => {
+        // no-op (processing will be handled by inertia useForm)
+      },
     });
   };
 
@@ -42,7 +113,7 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
         <div className="bg-white rounded-xl shadow p-5 flex items-center justify-between">
           <div>
             <div className="text-sm text-gray-500">Wallet Balance</div>
-            <div className="text-3xl font-bold">₹ {inr(balance)}</div>
+            <div className="text-3xl font-bold">₹ {inr(localBalance)}</div>
           </div>
         </div>
 
@@ -55,7 +126,11 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
                 min={minAmt}
                 step="0.01"
                 value={data.amount}
-                onChange={(e)=>setData("amount", e.target.value)}
+                onChange={(e) => {
+                  // clear client error as user types
+                  setClientError("");
+                  setData("amount", e.target.value);
+                }}
                 className="mt-1 w-full rounded-lg border-gray-300"
                 required
               />
@@ -68,7 +143,7 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
               <select
                 className="mt-1 w-full rounded-lg border-gray-300"
                 value={method}
-                onChange={(e)=>onMethod(e.target.value)}
+                onChange={(e) => onMethod(e.target.value)}
               >
                 {methods?.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -81,7 +156,7 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
                 <input
                   type="text"
                   value={data.upi_id}
-                  onChange={(e)=>setData("upi_id", e.target.value)}
+                  onChange={(e) => setData("upi_id", e.target.value)}
                   className="mt-1 w-full rounded-lg border-gray-300"
                   placeholder="yourname@bank"
                   required
@@ -92,22 +167,22 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
               <>
                 <div>
                   <label className="block text-sm font-medium">Account Holder Name</label>
-                  <input className="mt-1 w-full rounded-lg border-gray-300" value={data.account_name} onChange={(e)=>setData("account_name",e.target.value)} required />
+                  <input className="mt-1 w-full rounded-lg border-gray-300" value={data.account_name} onChange={(e) => setData("account_name", e.target.value)} required />
                   {errors.account_name && <p className="text-red-600 text-xs mt-1">{errors.account_name}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Bank Name</label>
-                  <input className="mt-1 w-full rounded-lg border-gray-300" value={data.bank_name} onChange={(e)=>setData("bank_name",e.target.value)} required />
+                  <input className="mt-1 w-full rounded-lg border-gray-300" value={data.bank_name} onChange={(e) => setData("bank_name", e.target.value)} required />
                   {errors.bank_name && <p className="text-red-600 text-xs mt-1">{errors.bank_name}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Account No.</label>
-                  <input className="mt-1 w-full rounded-lg border-gray-300" value={data.account_no} onChange={(e)=>setData("account_no",e.target.value)} required />
+                  <input className="mt-1 w-full rounded-lg border-gray-300" value={data.account_no} onChange={(e) => setData("account_no", e.target.value)} required />
                   {errors.account_no && <p className="text-red-600 text-xs mt-1">{errors.account_no}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium">IFSC</label>
-                  <input className="mt-1 w-full rounded-lg border-gray-300" value={data.ifsc} onChange={(e)=>setData("ifsc",e.target.value)} required />
+                  <input className="mt-1 w-full rounded-lg border-gray-300" value={data.ifsc} onChange={(e) => setData("ifsc", e.target.value)} required />
                   {errors.ifsc && <p className="text-red-600 text-xs mt-1">{errors.ifsc}</p>}
                 </div>
               </>
@@ -118,6 +193,8 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
             <div className="flex items-center justify-between"><span>Estimated charge</span><span>₹ {inr(estCharge())}</span></div>
             <div className="flex items-center justify-between font-semibold"><span>Net payout</span><span>₹ {inr(estNet())}</span></div>
           </div>
+
+          {clientError && <div className="text-sm text-red-600">{clientError}</div>}
 
           <button
             type="submit"
@@ -154,9 +231,9 @@ export default function Withdraw({ balance, rows, methods, minAmt = 200, chargeP
                     <td className="px-3 py-2">
                       <span className={
                         r.status === 'paid' ? 'text-green-600'
-                        : r.status === 'rejected' ? 'text-red-600'
-                        : r.status === 'approved' ? 'text-blue-600'
-                        : 'text-yellow-600'
+                          : r.status === 'rejected' ? 'text-red-600'
+                          : r.status === 'approved' ? 'text-blue-600'
+                          : 'text-yellow-600'
                       }>
                         {r.status}
                       </span>

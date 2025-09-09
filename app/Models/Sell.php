@@ -25,4 +25,7 @@ class Sell extends Model
     public function buyer(): BelongsTo    { return $this->belongsTo(\App\Models\User::class,'buyer_id'); }
     public function sponsor(): BelongsTo  { return $this->belongsTo(\App\Models\User::class,'sponsor_id'); }
     public function incomeTo(): BelongsTo { return $this->belongsTo(\App\Models\User::class,'income_to_user_id'); }
+
+
+
 }

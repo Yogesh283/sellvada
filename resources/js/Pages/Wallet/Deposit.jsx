@@ -114,6 +114,12 @@ export default function Deposit({ balance, deposits, methods }) {
     });
   };
 
+  // === QR image sources - update according to where you placed QR.png ===
+  // Your file: D:\xampp\htdocs\sellvada\public\image\QR.png -> accessible as /image/QR.png
+  const qrSrcPublic = "/image/QR.png";   // primary (public folder)
+  const qrSrcStorage = "/storage/QR.png"; // fallback if you use storage:link
+  const qrSrc = qrSrcPublic; // choose primary to use
+
   return (
     <AuthenticatedLayout>
       <Head title="Deposit" />
@@ -128,12 +134,32 @@ export default function Deposit({ balance, deposits, methods }) {
       />
 
       <div className="max-w-4xl mx-auto p-4 space-y-6">
-        {/* Balance */}
-        <div className="bg-white rounded-xl shadow p-5 flex items-center justify-between">
+        {/* Balance + QR */}
+        <div className="bg-white rounded-xl shadow p-5 flex flex-col md:flex-row items-center md:justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Wallet Balance</h2>
             <p className="text-3xl font-bold mt-1">₹ {formatINR(balance)}</p>
           </div>
+
+          {/* QR image block */}
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <p className="text-sm text-gray-500">Scan to pay</p>
+              <p className="text-xs text-gray-400">UPI / Bank transfer</p>
+            </div>
+            <div className="w-36 h-36 rounded-md overflow-hidden border p-2 bg-white">
+              <img
+                src={qrSrc}
+                alt="QR code for deposit (QR.png)"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  // fallback if image not found
+                  e.currentTarget.src = qrSrcStorage;
+                }}
+              />
+            </div>
+          </div>
+
           <Link href="/dashboard" className="text-indigo-600 hover:underline text-sm">
             ← Back to Dashboard
           </Link>
