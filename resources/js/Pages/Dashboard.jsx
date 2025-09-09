@@ -35,6 +35,7 @@ const formatDT = (s) => {
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
 };
 
+/* -------------------- Small UI components -------------------- */
 function StatCard({
   title,
   value = "₹0.00",
@@ -66,29 +67,51 @@ function StatCard({
   );
 }
 
-function CopyField({ label, value }) {
+/**
+ * CopyField - reusable copy-to-clipboard field
+ * Props:
+ *  - label: (string) optional left label (renders small text)
+ *  - value: (string) value to show and copy
+ */
+function CopyField({ label = null, value = "" }) {
   const [copied, setCopied] = useState(false);
+
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(value || "");
+      if (!navigator?.clipboard) {
+        // Fallback: select + execCommand (rarely required in modern browsers)
+        const tmp = document.createElement("textarea");
+        tmp.value = value || "";
+        document.body.appendChild(tmp);
+        tmp.select();
+        document.execCommand("copy");
+        tmp.remove();
+      } else {
+        await navigator.clipboard.writeText(value || "");
+      }
       setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
+      setTimeout(() => setCopied(false), 1600);
     } catch (e) {
-      console.error(e);
+      console.error("Copy failed", e);
     }
   };
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="min-w-28 text-sm font-medium text-slate-700">{label}</div>
+    <div className="flex items-center gap-2 w-full">
+      {label ? (
+        <div className="min-w-[4.5rem] text-sm font-medium text-slate-700">{label}</div>
+      ) : null}
       <input
-        className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800"
+        className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 font-mono"
         value={value || ""}
         readOnly
       />
       <button
         onClick={copy}
         type="button"
-        className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
+        className={`rounded px-3 py-1.5 text-sm font-semibold transition ${
+          copied ? "bg-green-600 text-white hover:bg-green-700" : "bg-emerald-600 text-white hover:bg-emerald-700"
+        }`}
       >
         {copied ? "Copied!" : "Copy"}
       </button>
@@ -129,11 +152,10 @@ export default function Dashboard() {
   const rightTeamCount = Number(stats?.right_team ?? (children?.right ? 1 : 0));
   const directPV = Number(stats?.direct_pv ?? 0);
 
-  // ✅ new: businessSummary + timewiseSales
   const businessSummary = props?.businessSummary ?? { left: 0, right: 0 };
   const timewiseSales = props?.timewiseSales ?? {
-    morning: { left: 0, right: 0 },
-    afternoon: { left: 0, right: 0 },
+    first_half: { left: 0, right: 0 },
+    second_half: { left: 0, right: 0 },
   };
 
   return (
@@ -141,8 +163,9 @@ export default function Dashboard() {
       header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Dashboard</h2>}
     >
       <Head title="Dashboard" />
-      {/* -------------------- Business Summary Table -------------------- */}
-      <div className="w-100 rounded-lg bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden">
+
+      {/* Business Summary */}
+      <div className="w-full rounded-lg bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden mb-6">
         <div className="bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-500 px-4 py-3 text-white font-semibold text-center">
           Business Summary
         </div>
@@ -156,7 +179,6 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {/* First Half 12 AM - 12 PM */}
               <tr className="border-b hover:bg-slate-50">
                 <td className="py-3 px-4 font-medium text-slate-700">First Half 12 AM - 12 PM</td>
                 <td className="py-3 px-4 text-emerald-700 font-semibold">
@@ -166,8 +188,6 @@ export default function Dashboard() {
                   {formatINR(timewiseSales.first_half?.right ?? 0)}
                 </td>
               </tr>
-
-              {/* Second Half 12 PM - 12 AM */}
               <tr className="hover:bg-slate-50">
                 <td className="py-3 px-4 font-medium text-slate-700">Second Half 12 PM - 12 AM</td>
                 <td className="py-3 px-4 text-emerald-700 font-semibold">
@@ -182,7 +202,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-
       <div className="mx-auto max-w-[1400px] px-3 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Welcome + referral box */}
         <div className="rounded-md bg-white shadow-sm ring-1 ring-slate-100">
@@ -193,45 +212,55 @@ export default function Dashboard() {
               <table className="min-w-full text-sm text-center border border-slate-200">
                 <tbody>
                   <tr className="border-b">
-                    <td className="px-4 py-2 font-medium text-slate-700">User ID</td>
-                    <td className="px-4 py-2 font-mono text-slate-900">{userId}</td>
+                    <td className="px-2 py-2 font-medium text-slate-700 sm:px-4">User ID</td>
+                    <td className="px-2 py-2 font-mono text-slate-900 sm:px-4">{userId}</td>
                   </tr>
+
+                  {/* Active Plan: using 'capitalize' class so 'diamond' -> 'Diamond' */}
                   <tr className="border-b">
-                    <td className="px-4 py-2 font-medium text-slate-700">Active Plan</td>
-                    <td className="px-4 py-2 font-mono text-slate-900">{CurrentPlan}</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="px-4 py-2 font-medium text-slate-700">Joined</td>
-                    <td className="px-4 py-2">{createdAt}</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="px-4 py-2 font-medium text-slate-700">Signup Link</td>
-                    <td className="px-4 py-2">
-                      <CopyField label="" value={ref_link} />
+                    <td className="px-2 py-2 font-medium text-slate-700 sm:px-4">Active Plan</td>
+                    <td className="px-2 py-2 font-mono text-slate-900 sm:px-4 capitalize">
+                      {CurrentPlan}
                     </td>
                   </tr>
+
+                  <tr className="border-b">
+                    <td className="px-2 py-2 font-medium text-slate-700 sm:px-4">Joined</td>
+                    <td className="px-2 py-2 sm:px-4">{createdAt}</td>
+                  </tr>
+
+                  {/* Signup Link: use reusable CopyField */}
+                  <tr className="border-b">
+                    <td className="px-2 py-2 font-medium text-slate-700 sm:px-4">Signup Link</td>
+                    <td className="px-2 py-2 sm:px-4">
+                      <CopyField value={ref_link} />
+                    </td>
+                  </tr>
+
                   <tr>
-                    <td className="px-4 py-2 font-medium text-slate-700">Quick Links</td>
-                    <td className="px-4 py-2 flex justify-center gap-2">
-                      <a
-                        href="/profile"
-                        className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
-                      >
-                        View Profile
-                      </a>
-                      <a
-                        href="/team"
-                        className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
-                      >
-                        My Team
-                      </a>
-                      <a
-                        href="/team/tree"
-                        className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
-                        title="View Team Tree"
-                      >
-                        Tree
-                      </a>
+                    <td className="px-2 py-2 font-medium text-slate-700 sm:px-4">Quick Links</td>
+                    <td className="px-2 py-2 sm:px-4">
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <a
+                          href="/profile"
+                          className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
+                        >
+                          View Profile
+                        </a>
+                        <a
+                          href="/team"
+                          className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
+                        >
+                          My Team
+                        </a>
+                        <a
+                          href="/team/tree"
+                          className="rounded bg-emerald-600 px-3 py-1 text-white text-xs font-semibold hover:bg-emerald-700"
+                          title="View Team Tree"
+                        >
+                          Tree
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
@@ -240,7 +269,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-
         {/* Top metric cards (colorful) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard title="Binary Matching" value="" icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
@@ -248,10 +276,11 @@ export default function Dashboard() {
           <StatCard title="Star Matching" value="" icon="💸" actionHref="/income/star" gradient={G.purpleIndigo} />
           <StatCard title="Wallet Balance" value={availableBalance} icon="👛" gradient={G.tealBlue} />
           <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" gradient={G.emerald} />
-            <StatCard title="MY PROFILE" value=" " icon="👤" actionHref="/profile" gradient={G.sky} />
+          <StatCard title="MY PROFILE" value=" " icon="👤" actionHref="/profile" gradient={G.sky} />
           <StatCard title="MY INCOME" value=" " icon="₹" actionHref="/income" gradient={G.rose} />
           <StatCard title="MY TEAM" value={TotalTeam} icon="👥" actionHref="/team" gradient={G.lime} />
         </div>
+
         {/* Accounts/Team counters */}
         <div className="rounded-lg shadow-sm ring-1 ring-slate-100 overflow-hidden">
           <div className={`${G.barEmerald} px-4 py-3 text-white text-center font-semibold`}>

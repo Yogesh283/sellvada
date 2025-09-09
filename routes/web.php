@@ -28,6 +28,10 @@ use App\Http\Controllers\BinarySummaryController;
 use Filament\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\P2PTransferController;
 
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/orders', [SellController::class, 'index'])->name('orders.my');
+});
+
 
 Route::middleware(['web','auth'])->group(function () {
     Route::get('/p2p/transfer', [P2PTransferController::class, 'show'])->name('p2p.transfer.page');

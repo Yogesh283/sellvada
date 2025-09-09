@@ -395,8 +395,14 @@ export default function Card({ items: serverItems = null }) {
             <h3 className="text-lg font-semibold text-emerald-700">Order Confirmed</h3>
             <p className="mt-2 text-sm text-slate-600">
               Your order has been placed successfully.
-              {orderNo && <span className="block mt-2 font-medium">Order No: {orderNo}</span>}
+              <span className="block">Delivery time: 7 - 15 days</span>
+              {orderNo && (
+                <span className="block mt-2 font-medium">
+                  Order No: {orderNo}
+                </span>
+              )}
             </p>
+
             <div className="mt-4 flex justify-end gap-2">
               <a href="/orders" className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700">View Orders</a>
               <button onClick={() => setShowSuccessModal(false)} className="rounded-lg border px-3 py-2 text-sm font-medium">Close</button>
