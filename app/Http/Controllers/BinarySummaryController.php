@@ -14,7 +14,7 @@ class BinarySummaryController extends Controller
      * All-level team business grouped by rank (Silver/Gold/Diamond/Other),
      * per-leg (L/R) Orders + Amount, Matched (pair) amount and Carry Forward.
      * Tree rule: child.refer_by = parent.referral_id
-     * Leg comes from users.position (L/R)
+     * Leg comes from ROOT CHILD (L/R), propagate to all descendants
      * Filters: ?from=YYYY-MM-DD&to=YYYY-MM-DD
      * View: Income/Binary
      */
@@ -30,7 +30,12 @@ class BinarySummaryController extends Controller
         $myReferral = (string) DB::table('users')->where('id', $userId)->value('referral_id');
 
         // skeleton row
-        $emptyRow = ['left'=>0,'right'=>0,'orders_left'=>0,'orders_right'=>0,'matched'=>0,'pairs'=>0,'cf_left'=>0,'cf_right'=>0];
+        $emptyRow = [
+            'left'=>0,'right'=>0,
+            'orders_left'=>0,'orders_right'=>0,
+            'matched'=>0,'pairs'=>0,
+            'cf_left'=>0,'cf_right'=>0
+        ];
         $matrix = [
             'Silver'  => $emptyRow,
             'Gold'    => $emptyRow,
@@ -58,30 +63,33 @@ class BinarySummaryController extends Controller
         // ===== Rank/Leg aggregation (Orders + Amount) =====
         $rowsSql = "
 WITH RECURSIVE team AS (
-  SELECT id, referral_id, refer_by, position, 1 AS lvl
+  -- direct children: keep their own position as root_leg
+  SELECT id, referral_id, refer_by, position,
+         UPPER(COALESCE(position,'NA')) AS root_leg
   FROM users
   WHERE refer_by = ?
 
   UNION ALL
-  SELECT u.id, u.referral_id, u.refer_by, u.position, t.lvl + 1
+  -- propagate same root_leg to all descendants
+  SELECT u.id, u.referral_id, u.refer_by, u.position, t.root_leg
   FROM users u
   JOIN team t ON u.refer_by = t.referral_id
 )
 SELECT
   x.type,
-  x.leg,
+  x.root_leg AS leg,
   SUM(x.amount) AS amount,
   COUNT(*)      AS orders
 FROM (
   SELECT
     LOWER(COALESCE(NULLIF(s.type,''),'other')) AS type,
-    UPPER(COALESCE(u.position,'NA'))          AS leg,
+    t.root_leg,
     s.amount
-  FROM team u
-  JOIN sell s ON s.buyer_id = u.id
+  FROM team t
+  JOIN sell s ON s.buyer_id = t.id
   WHERE s.status = 'paid' {$dateSql}
 ) x
-GROUP BY x.type, x.leg
+GROUP BY x.type, x.root_leg
 ";
         $rows = DB::select($rowsSql, $bind);
 
@@ -100,7 +108,6 @@ GROUP BY x.type, x.leg
         }
 
         // ===== Matched (pair) amount + CF per rank =====
-        // unit BV per rank (orders assumed homogeneous inside a rank)
         $unit = ['silver'=>3000.0, 'gold'=>15000.0, 'diamond'=>30000.0];
 
         $cfLTotal = 0.0; $cfRTotal = 0.0;
@@ -109,18 +116,15 @@ GROUP BY x.type, x.leg
             $leftAmt  = (float)($row['left']  ?? 0);
             $rightAmt = (float)($row['right'] ?? 0);
 
-            // Matched amount = amount utilised in pairs
             $matchedAmt = min($leftAmt, $rightAmt);
             $row['matched'] = $matchedAmt;
 
-            // Pairs count (best-effort): by unit BV if known, else by min order count
             if (isset($unit[$rank]) && $unit[$rank] > 0) {
                 $row['pairs'] = (int) floor($matchedAmt / $unit[$rank]);
             } else {
                 $row['pairs'] = min((int)($row['orders_left'] ?? 0), (int)($row['orders_right'] ?? 0));
             }
 
-            // Carry forward (unmatched extra)
             $row['cf_left']  = max(0.0, $leftAmt  - $matchedAmt);
             $row['cf_right'] = max(0.0, $rightAmt - $matchedAmt);
 
@@ -129,19 +133,19 @@ GROUP BY x.type, x.leg
         }
         unset($row);
 
-        // Top cards stay: total left/right business
         $leftTotal  = array_sum(array_column($matrix, 'left'));
         $rightTotal = array_sum(array_column($matrix, 'right'));
 
         // ===== Recent 20 paid orders (context) =====
         $recentSql = "
 WITH RECURSIVE team AS (
-  SELECT id, referral_id, refer_by, position, 1 AS lvl
+  SELECT id, referral_id, refer_by, position,
+         UPPER(COALESCE(position,'NA')) AS root_leg
   FROM users
   WHERE refer_by = ?
 
   UNION ALL
-  SELECT u.id, u.referral_id, u.refer_by, u.position, t.lvl + 1
+  SELECT u.id, u.referral_id, u.refer_by, u.position, t.root_leg
   FROM users u
   JOIN team t ON u.refer_by = t.referral_id
 )
@@ -149,11 +153,11 @@ SELECT
   s.buyer_id,
   s.product,
   LOWER(COALESCE(NULLIF(s.type,''),'other')) AS type,
-  UPPER(COALESCE(u.position,'NA'))          AS leg,
+  t.root_leg AS leg,
   s.amount,
   s.created_at
-FROM team u
-JOIN sell s ON s.buyer_id = u.id
+FROM team t
+JOIN sell s ON s.buyer_id = t.id
 WHERE s.status='paid' {$dateSql}
 ORDER BY s.id DESC
 LIMIT 20
@@ -170,10 +174,14 @@ LIMIT 20
         return Inertia::render('Income/Binary', [
             'asOf'        => now()->toDateTimeString(),
             'filters'     => ['from'=>$from, 'to'=>$to],
-            'totals'      => ['left'=>$leftTotal, 'right'=>$rightTotal],   // top cards
-            'matrix'      => $matrix,                                      // table rows
+            'totals'      => ['left'=>$leftTotal, 'right'=>$rightTotal],
+            'matrix'      => $matrix,
             'recent'      => $recent,
-            'carryTotals' => ['left'=>$cfLTotal,'right'=>$cfRTotal,'total'=>$cfLTotal+$cfRTotal],
+            'carryTotals' => [
+                'left'=>$cfLTotal,
+                'right'=>$cfRTotal,
+                'total'=>$cfLTotal+$cfRTotal
+            ],
         ]);
     }
 }

@@ -35,70 +35,109 @@ class DashboardController extends Controller
             ->limit(10)
             ->get(['id','buyer_id','product','amount','type','status','created_at']);
 
-        // Team sells (direct legs by sponsor_id = me) + optional leg filter
-        $teamSellsQuery = DB::table('sell')
-            ->join('users as buyer', 'buyer.id', '=', 'sell.buyer_id')
-            ->where('sell.sponsor_id', $user->id)
-            ->orderByDesc('sell.id');
+        // --- Prepare recursive CTE only if we have a referral root ---
+        $hasReferral = ! empty($myReferralId);
 
-        if (in_array($request->get('leg'), ['L','R'], true)) {
-            $teamSellsQuery->where('sell.leg', $request->get('leg'));
+        // Team sells (using propagated root_leg). Fallback: if no referral, keep existing behaviour (empty)
+        $teamSells = collect();
+        $teamLeftSells = collect();
+        $teamRightSells = collect();
+
+        if ($hasReferral) {
+            // CTE: root children keep their position as root_leg, propagate to descendants
+            $teamCte = "
+WITH RECURSIVE team AS (
+  SELECT id, referral_id, refer_by, position,
+         UPPER(COALESCE(position,'NA')) AS root_leg
+  FROM users
+  WHERE refer_by = ?
+
+  UNION ALL
+
+  SELECT u.id, u.referral_id, u.refer_by, u.position, t.root_leg
+  FROM users u
+  JOIN team t ON u.refer_by = t.referral_id
+)
+";
+            // team sells (all legs) - recent 10
+            $teamSellsSql = $teamCte . "
+SELECT
+  s.id,
+  s.buyer_id,
+  buyer.name AS buyer_name,
+  s.product,
+  s.amount,
+  s.type,
+  s.status,
+  t.root_leg AS leg,
+  s.created_at
+FROM team t
+JOIN sell s ON s.buyer_id = t.id
+LEFT JOIN users buyer ON buyer.id = s.buyer_id
+ORDER BY s.id DESC
+LIMIT 10
+";
+            $teamSells = collect(DB::select($teamSellsSql, [$myReferralId]));
+
+            // left sells (root_leg = 'L')
+            $teamLeftSql = $teamCte . "
+SELECT
+  s.id,
+  s.buyer_id,
+  buyer.name AS buyer_name,
+  s.product,
+  s.amount,
+  s.type,
+  s.status,
+  t.root_leg AS leg,
+  s.created_at
+FROM team t
+JOIN sell s ON s.buyer_id = t.id
+LEFT JOIN users buyer ON buyer.id = s.buyer_id
+WHERE t.root_leg = 'L'
+ORDER BY s.id DESC
+LIMIT 10
+";
+            $teamLeftSells = collect(DB::select($teamLeftSql, [$myReferralId]));
+
+            // right sells (root_leg = 'R')
+            $teamRightSql = $teamCte . "
+SELECT
+  s.id,
+  s.buyer_id,
+  buyer.name AS buyer_name,
+  s.product,
+  s.amount,
+  s.type,
+  s.status,
+  t.root_leg AS leg,
+  s.created_at
+FROM team t
+JOIN sell s ON s.buyer_id = t.id
+LEFT JOIN users buyer ON buyer.id = s.buyer_id
+WHERE t.root_leg = 'R'
+ORDER BY s.id DESC
+LIMIT 10
+";
+            $teamRightSells = collect(DB::select($teamRightSql, [$myReferralId]));
+        } else {
+            // keep empty collections (or you can keep existing logic using sponsor_id)
+            $teamSells = collect();
+            $teamLeftSells = collect();
+            $teamRightSells = collect();
         }
-
-        $teamSells = $teamSellsQuery
-            ->limit(10)
-            ->get([
-                'sell.id',
-                'buyer.id as buyer_id',
-                'buyer.name as buyer_name',
-                'sell.product',
-                'sell.amount',
-                'sell.type',
-                'sell.status',
-                'sell.leg',
-                'sell.created_at',
-            ]);
 
         // Immediate left/right users (if set)
         $leftUser  = $user->leftChild ? $user->leftChild->only(['id','name','email'])   : null;
         $rightUser = $user->rightChild ? $user->rightChild->only(['id','name','email']) : null;
 
-        // Left leg recent sells
-        $teamLeftSells = DB::table('sell')
-            ->join('users as buyer', 'buyer.id', '=', 'sell.buyer_id')
-            ->where('sell.sponsor_id', $user->id)
-            ->where('sell.leg', 'L')
-            ->orderByDesc('sell.id')
-            ->limit(10)
-            ->get([
-                'sell.id',
-                'buyer.id as buyer_id',
-                'buyer.name as buyer_name',
-                'sell.product','sell.amount','sell.type','sell.status','sell.leg','sell.created_at',
-            ]);
-
-        // Right leg recent sells
-        $teamRightSells = DB::table('sell')
-            ->join('users as buyer', 'buyer.id', '=', 'sell.buyer_id')
-            ->where('sell.sponsor_id', $user->id)
-            ->where('sell.leg', 'R')
-            ->orderByDesc('sell.id')
-            ->limit(10)
-            ->get([
-                'sell.id',
-                'buyer.id as buyer_id',
-                'buyer.name as buyer_name',
-                'sell.product','sell.amount','sell.type','sell.status','sell.leg','sell.created_at',
-            ]);
-
-        // Referral link
+        // Referral link activation check (same as before)
         $Ref = DB::table('sell')->where('buyer_id', $user->id)->where('status', 'paid')->orderByDesc('id')->value('type');
 
-        if($Ref){
+        if ($Ref) {
             $refLink = url('/register?refer_by=' . ($user->referral_id ?? ''));
             $refral  = $user->referral_id;
-        }
-        else{
+        } else {
             $refLink = "Please purchase a plan to activate your referral link.";
             $refral  = '-';
         }
@@ -120,9 +159,9 @@ class DashboardController extends Controller
                                 ->whereDate('created_at', Carbon::today())
                                 ->sum('amount');
 
-        // Total team count
+        // Total team count (using propagated CTE)
         $totalTeam = 0;
-        if (!empty($myReferralId)) {
+        if ($hasReferral) {
             $row = DB::selectOne("
                 WITH RECURSIVE team AS (
                     SELECT id, referral_id, refer_by, position
@@ -141,7 +180,7 @@ class DashboardController extends Controller
             $totalTeam = (int) ($row->cnt ?? 0);
         }
 
-        // ✅ Timewise Sales (12 AM - 12 PM & 12 PM - 12 AM)
+        // Timewise Sales (12 AM - 12 PM & 12 PM - 12 AM) - using sponsor_id & leg (kept as before)
         $today = Carbon::today();
 
         // First Half (12 AM - 12 PM)
@@ -166,7 +205,7 @@ class DashboardController extends Controller
             ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
             ->sum('amount');
 
-        // Full user data
+        // Full user data (mask sensitive fields)
         $userAll = [
             'id'               => $user->id,
             'name'             => $user->name,
@@ -189,18 +228,56 @@ class DashboardController extends Controller
         $userSafe = Arr::except($raw, ['password','remember_token','Password_plain']);
         $plan = DB::table('sell')->where('buyer_id', $user->id)->where('status', 'paid')->orderByDesc('id')->value('type');
 
-        // Left & Right business from sell table (for logged-in user)
-        $leftBusiness = DB::table('sell')
-            ->where('sponsor_id', $user->id)
-            ->where('leg', 'L')
-            ->where('status', 'paid')
-            ->sum('amount');
+        // Left & Right business from sell table (for logged-in user) using propagated root_leg
+        $businessSummary = ['left' => 0.0, 'right' => 0.0];
 
-        $rightBusiness = DB::table('sell')
-            ->where('sponsor_id', $user->id)
-            ->where('leg', 'R')
-            ->where('status', 'paid')
-            ->sum('amount');
+        if ($hasReferral) {
+            // Sum paid amount where root_leg = 'L'
+            $leftRow = DB::selectOne("
+                WITH RECURSIVE team AS (
+                  SELECT id, referral_id, refer_by, position,
+                         UPPER(COALESCE(position,'NA')) AS root_leg
+                  FROM users
+                  WHERE refer_by = ?
+
+                  UNION ALL
+
+                  SELECT u.id, u.referral_id, u.refer_by, u.position, t.root_leg
+                  FROM users u
+                  JOIN team t ON u.refer_by = t.referral_id
+                )
+                SELECT COALESCE(SUM(s.amount),0) AS amt
+                FROM team t
+                JOIN sell s ON s.buyer_id = t.id
+                WHERE t.root_leg = 'L' AND s.status = 'paid'
+            ", [$myReferralId]);
+
+            $rightRow = DB::selectOne("
+                WITH RECURSIVE team AS (
+                  SELECT id, referral_id, refer_by, position,
+                         UPPER(COALESCE(position,'NA')) AS root_leg
+                  FROM users
+                  WHERE refer_by = ?
+
+                  UNION ALL
+
+                  SELECT u.id, u.referral_id, u.refer_by, u.position, t.root_leg
+                  FROM users u
+                  JOIN team t ON u.refer_by = t.referral_id
+                )
+                SELECT COALESCE(SUM(s.amount),0) AS amt
+                FROM team t
+                JOIN sell s ON s.buyer_id = t.id
+                WHERE t.root_leg = 'R' AND s.status = 'paid'
+            ", [$myReferralId]);
+
+            $businessSummary['left']  = (float) ($leftRow->amt ?? 0);
+            $businessSummary['right'] = (float) ($rightRow->amt ?? 0);
+        } else {
+            // fallback: keep direct sponsor-based sums (same as original behaviour)
+            $businessSummary['left']  = DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'L')->where('status', 'paid')->sum('amount');
+            $businessSummary['right'] = DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'R')->where('status', 'paid')->sum('amount');
+        }
 
         // Add in props
         return Inertia::render('Dashboard', [
@@ -228,11 +305,8 @@ class DashboardController extends Controller
             'right_user'       => $rightUser,
             'ref_link'         => $refLink,
 
-            // 👉 New: Left & Right Business
-            'businessSummary'  => [
-                'left'  => $leftBusiness,
-                'right' => $rightBusiness,
-            ],
+            // 👉 New: Left & Right Business (propagated)
+            'businessSummary'  => $businessSummary,
             'timewiseSales'    => [
                 'first_half'  => ['left' => $firstHalfLeft, 'right' => $firstHalfRight],
                 'second_half' => ['left' => $secondHalfLeft, 'right' => $secondHalfRight],

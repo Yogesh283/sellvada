@@ -114,7 +114,7 @@ class RegisteredUserController extends Controller
             // (optional) ensure wallet row now, if not using model event
             DB::table('wallet')->updateOrInsert(
                 ['user_id' => $user->id],
-                ['amount' => 100000, 'type' => 'main', 'updated_at' => now(), 'created_at' => now()]
+                ['amount' => 0, 'type' => 'main', 'updated_at' => now(), 'created_at' => now()]
             );
 
             return $user;
