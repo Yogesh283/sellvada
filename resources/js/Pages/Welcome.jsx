@@ -6,7 +6,6 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import "swiper/css";
 
-
 const CATALOG = {
   superfruit: {
     id: 1,
@@ -14,16 +13,15 @@ const CATALOG = {
     img: "/image/2.png",
     variant: "30 Pic gummies(2 bottles)",
     type: "silver",
-
     bottles: 2,
     gummiesPerBottle: 30,
     unitPrice: 2000,
-    baseTotal: 2 * 2000,      // 4000
-    mrp: 3000,                // offer price
-    price: 3000,              // used by cart
-    discount: 4000 - 3000,    // 1000
+    baseTotal: 2 * 2000, // 4000
+    mrp: 3000,
+    price: 3000,
+    discount: 4000 - 3000, // 1000
     discountPercent: 25,
-    totalGummies: 2 * 30,     // 60
+    totalGummies: 2 * 30, // 60
     pricePerGummy: 3000 / 60, // 50
   },
 
@@ -33,16 +31,15 @@ const CATALOG = {
     img: "/image/10.png",
     variant: "30 Pic gummies(10 bottles)",
     type: "gold",
-
     bottles: 10,
     gummiesPerBottle: 30,
     unitPrice: 2000,
-    baseTotal: 10 * 2000,     // 20000
+    baseTotal: 10 * 2000, // 20000
     mrp: 15000,
     price: 15000,
-    discount: 20000 - 15000,  // 5000
+    discount: 20000 - 15000, // 5000
     discountPercent: 25,
-    totalGummies: 10 * 30,    // 300
+    totalGummies: 10 * 30, // 300
     pricePerGummy: 15000 / 300,
   },
 
@@ -52,16 +49,15 @@ const CATALOG = {
     img: "/image/20.png",
     variant: "30 Pic gummies(20 bottles)",
     type: "diamond",
-
     bottles: 20,
     gummiesPerBottle: 30,
     unitPrice: 2000,
-    baseTotal: 20 * 2000,     // 40000
+    baseTotal: 20 * 2000, // 40000
     mrp: 30000,
     price: 30000,
-    discount: 40000 - 30000,  // 10000
+    discount: 40000 - 30000, // 10000
     discountPercent: 25,
-    totalGummies: 20 * 30,    // 600
+    totalGummies: 20 * 30, // 600
     pricePerGummy: 30000 / 600,
   },
 };
@@ -95,9 +91,6 @@ function ImageSlider() {
     </Swiper>
   );
 }
-
-
-
 
 /* ----------------- UI helpers ----------------- */
 const Section = ({ children, className = "" }) => (
@@ -226,6 +219,32 @@ function ProductCard({ product, bullets = [] }) {
   );
 }
 
+/* ----------- COA Image Section ----------- */
+const CoaImage = ({ src, title = "Certificate of Analysis" }) => (
+  <section className="mx-auto w-full max-w-[1230px] px-3 sm:px-4 my-10">
+    <div className="rounded-3xl bg-white p-5 sm:p-8 shadow-md ring-1 ring-slate-100">
+      <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-4">{title}</h3>
+      <div className="w-full flex justify-center">
+        <img
+          src={src}
+          alt={title}
+          className="rounded-lg shadow-lg border border-slate-200 max-w-full h-auto"
+        />
+      </div>
+      <div className="mt-4 text-center">
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center rounded-lg bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 px-5 py-2.5 text-white font-semibold hover:from-cyan-700 hover:to-blue-700"
+        >
+          View Full Size
+        </a>
+      </div>
+    </div>
+  </section>
+);
+
 /* ----------------- Page ----------------- */
 export default function Welcome() {
   return (
@@ -276,8 +295,11 @@ export default function Welcome() {
           </div>
         </Section>
 
+        {/* COA Image - place file at public/images/coa.png */}
+        <CoaImage src="/image/coa.png" title="Certificate of Analysis - Cellveda Super Food Gummies" />
+
         {/* Featured Product */}
-        <Section className="mt-10 sm:mt-12">
+        {/* <Section className="mt-10 sm:mt-12">
           <div className="rounded-3xl bg-white shadow-lg ring-1 ring-slate-100 p-6 sm:p-8">
             <div className="grid md:grid-cols-2 gap-8 items-center">
               <div className="flex justify-center md:justify-start">
@@ -320,7 +342,7 @@ export default function Welcome() {
               </div>
             </div>
           </div>
-        </Section>
+        </Section> */}
 
         {/* Product Grid */}
         <Section className="mt-10 sm:mt-14" id="products">
