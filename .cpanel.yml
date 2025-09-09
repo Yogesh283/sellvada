@@ -1,51 +1,40 @@
+# ---
+# deployment:
+#   tasks:
+#     - export COMPOSER=/opt/cpanel/composer/bin/composer
+#     - $COMPOSER install --no-dev --optimize-autoloader
+#     - php artisan migrate --force
+#     - php artisan optimize
+
+
 ---
 deployment:
   tasks:
     - export APP_ROOT=/home/dgadspac/repositories/sellvada
     - export WEBROOT=/home/dgadspac/public_html
     - export PHP=/opt/cpanel/ea-php82/root/usr/bin/php
-    - export COMPOSER=/opt/cpanel/composer/bin/composer
 
-    # 1) Optional: put app in maintenance mode (uncomment to activate)
-    - '$PHP artisan down --quiet || true'
+    # PHP deps (dev skip)
+    - /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-    # 2) Install/update PHP dependencies (no dev)
-    - '$COMPOSER install --no-dev --optimize-autoloader --no-interaction --prefer-dist'
-
-    # 3) (Optional) Run migrations — use only if you trust automatic DB migrations
-    # - '$PHP artisan migrate --force'
-
-    # 4) Generate APP_KEY only if missing (safe)
+    # Ensure APP_KEY (run once ok)
     - 'grep -q "^APP_KEY=" "$APP_ROOT/.env" || $PHP artisan key:generate --force'
 
-    # 5) Clear and rebuild caches
+    # Clear + rebuild caches
     - '$PHP artisan optimize:clear'
     - '$PHP artisan config:cache'
     - '$PHP artisan route:cache'
     - '$PHP artisan view:cache'
 
-    # 6) Sync public assets to webroot but DO NOT overwrite server's index.php (you provided deploy/index.php.live)
+    # Public assets sync (server ke index.php ko NA chhedo)
     - 'rsync -a --delete --exclude "index.php" "$APP_ROOT/public/" "$WEBROOT/"'
 
-    # 7) Replace index.php with your "live" entry (you must have deploy/index.php.live in repo)
-    - 'install -m 0644 "$APP_ROOT/deploy/index.php.live" "$WEBROOT/index.php" || true'
+    # Live index.php set from deploy file
+    - 'install -m 0644 "$APP_ROOT/deploy/index.php.live" "$WEBROOT/index.php"'
 
-    # 8) Ensure storage link exists (idempotent)
-    - 'ln -sfn "$APP_ROOT/storage/app/public" "$WEBROOT/storage" || true'
+    # Storage symlink (idempotent)
+    - 'ln -sfn "$APP_ROOT/storage/app/public" "$WEBROOT/storage"'
 
-    # 9) Set appropriate ownership and permissions (adjust CPANEL_USER if needed)
-    - 'chown -R dgadspac:dgadspac "$APP_ROOT" || true'
-    - 'chown -R dgadspac:dgadspac "$WEBROOT" || true'
-    - 'find "$APP_ROOT" -type d -exec chmod 755 {} \; || true'
-    - 'find "$APP_ROOT" -type f -exec chmod 644 {} \; || true'
-    - 'find "$WEBROOT" -type d -exec chmod 755 {} \; || true'
-    - 'find "$WEBROOT" -type f -exec chmod 644 {} \; || true'
-
-    # 10) Opcache reset if available (safe)
+    # Opcache reset (safe if available)
     - '$PHP -r "function_exists(\"opcache_reset\") && opcache_reset();" || true'
 
-    # 11) Optional: bring app up
-    - '$PHP artisan up --quiet || true'
-
-    # 12) Final message (helps in logs)
-    - 'echo "Deployment finished: $(date -u +%Y-%m-%dT%H:%M:%SZ)"'
