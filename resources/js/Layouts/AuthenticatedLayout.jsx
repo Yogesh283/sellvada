@@ -21,6 +21,11 @@ export default function AuthenticatedLayout({ header, children }) {
     try { return route('repurchase.index'); } catch { return '/repurchase'; }
   })();
 
+  // Safe href for Orders page
+  const ordersHref = (() => {
+    try { return route('orders.index'); } catch { return '/orders'; }
+  })();
+
   useEffect(() => {
     // fetch the current balance if logged in
     if (!user) return;
@@ -67,6 +72,15 @@ export default function AuthenticatedLayout({ header, children }) {
 
                 <NavLink href="/" active={is('home')} className="text-black">
                   Products
+                </NavLink>
+
+                {/* Orders */}
+                <NavLink
+                  href={ordersHref}
+                  active={is('orders.index') || is('orders')}
+                  className="text-black"
+                >
+                  Orders
                 </NavLink>
 
                 {/* Repurchase */}
@@ -148,6 +162,11 @@ export default function AuthenticatedLayout({ header, children }) {
 
                         <DesktopMenuLink href="/" active={is('home')} onClick={() => setPanelOpen(false)}>
                           Products
+                        </DesktopMenuLink>
+
+                        {/* Orders */}
+                        <DesktopMenuLink href={ordersHref} active={is('orders.index') || is('orders')} onClick={() => setPanelOpen(false)}>
+                          Orders
                         </DesktopMenuLink>
 
                         {/* Cart (if used) */}
@@ -272,6 +291,11 @@ export default function AuthenticatedLayout({ header, children }) {
               </ResponsiveNavLink>
               <ResponsiveNavLink href="/" active={is('home')}>
                 Products
+              </ResponsiveNavLink>
+
+              {/* Orders */}
+              <ResponsiveNavLink href={ordersHref} active={is('orders.index') || is('orders')}>
+                Orders
               </ResponsiveNavLink>
 
               {/* Repurchase */}
