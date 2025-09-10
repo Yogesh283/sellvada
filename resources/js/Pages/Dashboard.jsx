@@ -301,6 +301,13 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+
+            {/* ADDED: Buttons from first code (no other changes) */}
+            <div className="mt-4 flex items-end justify-end gap-2">
+              <a href="/profile" className="rounded bg-sky-600 px-3 py-2 text-white text-sm font-semibold hover:bg-sky-700">View Profile</a>
+              <a href="/team" className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700">My Team</a>
+              <a href="/team/tree" className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700">Tree</a>
+            </div>
           </div>
         </div>
 
