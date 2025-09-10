@@ -169,8 +169,8 @@ export default function Binary() {
 
         {/* KPI cards with colors */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <StatCard label="Left Business" value={totals?.left} tone="left" />
-          <StatCard label="Right Business" value={totals?.right} tone="right" />
+          <StatCard label="Left Business" value={grand.aL} tone="left" />
+          <StatCard label="Right Business" value={grand.aR} tone="right" />
         </div>
 
         {/* Rank-wise table (without "other") */}

@@ -127,7 +127,7 @@ export default function Repurchase({ product, walletBalance = 0, defaultAddress 
     if (walletBalance < Number(grand)) return showPopup("Insufficient Balance", `Need ${formatINR(grand)} in wallet.`, "error");
 
     router.post(
-      route("repurchase.checkout"),
+      route("repurchase.repurchaseOrder"),
       { items, coupon: appliedCoupon, shipping: 0 }, // pass shipping (0 or actual)
       {
         preserveScroll: true,

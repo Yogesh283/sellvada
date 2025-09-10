@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -51,13 +51,13 @@ class RepurchaseController extends Controller
     }
 
     // ✅ Checkout order
-   // ✅ Checkout order
-public function checkout(Request $request)
+
+
+public function repurchaseOrder(Request $request)
 {
     $userId = (int) Auth::id();
     abort_unless($userId, 401);
 
-    // Items from frontend
     $items = (array) $request->input('items', []);
     if (empty($items)) {
         return back()->withErrors(['cart' => 'Cart is empty.']);
@@ -110,23 +110,29 @@ public function checkout(Request $request)
         return back()->withErrors(['wallet' => 'Insufficient wallet balance.']);
     }
 
-    // ✅ Sponsor ID निकालो (users table से)
+    // Sponsor ID
     $sponsorId = DB::table('users')->where('id', $userId)->value('sponsor_id');
 
-    // ✅ Transaction
+    // Generate order-level identifiers
+    $invoiceNo  = 'R' . time() . mt_rand(100, 999);         // e.g. R1623456789102XXX
+    $paymentRef = (string) Str::uuid();                     // unique payment reference
+
     DB::beginTransaction();
     try {
-        // Insert repurchase rows
+        // Insert repurchase rows (one per line) with invoice/payment/paid_at
         foreach ($lines as $L) {
             DB::table('repurchase')->insert([
-                'buyer_id'   => $userId,
-                'sponsor_id' => $sponsorId,   // ✅ अब sponsor_id भी जाएगा
-                'product'    => $L['product'],
-                'qty'        => $L['qty'],
-                'amount'     => number_format($L['line'], 2, '.', ''),
-                'status'     => 'paid',
-                'created_at' => now(),
-                'updated_at' => now(),
+                'buyer_id'     => $userId,
+                'sponsor_id'   => $sponsorId,
+                'product'      => $L['product'],
+                'qty'          => $L['qty'],
+                'amount'       => number_format($L['line'], 2, '.', ''),
+                'invoice_no'   => $invoiceNo,
+                'payment_ref'  => $paymentRef,
+                'status'       => 'paid',
+                'paid_at'      => now(),
+                'created_at'   => now(),
+                'updated_at'   => now(),
             ]);
         }
 
@@ -148,18 +154,20 @@ public function checkout(Request $request)
                 'updated_at' => now(),
             ]);
 
-        // Insert into payout ledger
-        DB::table('_payout')->insert([
-            'user_id'      => $userId,
-            'to_user_id'   => $sponsorId,
-            'from_user_id' => $userId,
-            'amount'       => $grand,
-            'status'       => 'paid',
-            'method'       => 'wallet',
-            'type'         => 'repurchase_payment',
-            'created_at'   => now(),
-            'updated_at'   => now(),
-        ]);
+        // // Insert into payout ledger (also include invoice/payment_ref if you want)
+        // DB::table('_payout')->insert([
+        //     'user_id'      => $userId,
+        //     'to_user_id'   => $sponsorId,
+        //     'from_user_id' => $userId,
+        //     'amount'       => $grand,
+        //     'status'       => 'paid',
+        //     'method'       => 'wallet',
+        //     'type'         => 'repurchase_payment',
+        //     'payment_ref'  => $paymentRef,
+        //     'invoice_no'   => $invoiceNo,
+        //     'created_at'   => now(),
+        //     'updated_at'   => now(),
+        // ]);
 
         DB::commit();
     } catch (\Throwable $e) {
@@ -170,4 +178,5 @@ public function checkout(Request $request)
 
     return back()->with('success', 'Repurchase order placed!');
 }
+
 }
