@@ -126,6 +126,8 @@ export default function Dashboard() {
   const payoutBalance = formatINR(props?.payout_wallet ?? 0);
   const TotalTeam = props?.total_team ?? 0;
   const CurrentPlan = props?.current_plan ?? "-";
+  const {left,right,matched} = usePage().props;
+  
 
   const {
     user = {},
@@ -225,6 +227,27 @@ export default function Dashboard() {
           <StatCard title="MY INCOME" value=" " icon="₹" actionHref="/income" gradient={G.rose} />
           <StatCard title="MY TEAM" value={TotalTeam} icon="👥" actionHref="/team" gradient={G.lime} />
         </div>
+
+ <div className="rounded-lg bg-pink-500 shadow-sm overflow-hidden border border-slate-200 p-4 space-y-4">
+  <p className="text-center text-2xl text-white text-pretty ">Star Rank Value</p>
+       <div className="grid md:grid-cols-3 gap-4">
+          <div className="bg-white shadow rounded-xl p-4">
+            <div className="text-xs text-gray-500">Left Volume</div>
+            <div className="text-xl font-semibold">{Number(left)}</div>
+          </div>
+          <div className="bg-white shadow rounded-xl p-4">
+            <div className="text-xs text-gray-500">Right Volume</div>
+            <div className="text-xl font-semibold">{Number(right)}</div>
+          </div>
+          {/* <div className="bg-white shadow rounded-xl p-4">
+            <div className="text-xs text-gray-500">Total Matching Volume</div>
+            <div className="text-xl font-semibold">{Number(matched)}</div>
+          </div> */}
+        </div>
+
+        </div>
+
+
 
         {/* Recent Purchases */}
         <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">

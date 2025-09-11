@@ -11,39 +11,62 @@ use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
+    /**
+     * Slab definitions (copied from StarIncomeController so Dashboard is self-contained)
+     */
+    private array $slabs = [
+        ['no'=>1,  'name'=>'1 STAR',  'threshold'=> 100000,      'income'=>   2000],
+        ['no'=>2,  'name'=>'2 STAR',  'threshold'=> 200000,      'income'=>   4000],
+        ['no'=>3,  'name'=>'3 STAR',  'threshold'=> 400000,      'income'=>   8000],
+        ['no'=>4,  'name'=>'4 STAR',  'threshold'=> 800000,      'income'=>  16000],
+        ['no'=>5,  'name'=>'5 STAR',  'threshold'=>1600000,      'income'=>  32000],
+        ['no'=>6,  'name'=>'6 STAR',  'threshold'=>3200000,      'income'=>  64000],
+        ['no'=>7,  'name'=>'7 STAR',  'threshold'=>6400000,      'income'=> 128000],
+        ['no'=>8,  'name'=>'8 STAR',  'threshold'=>12800000,     'income'=> 256000],
+        ['no'=>9,  'name'=>'9 STAR',  'threshold'=>25000000,     'income'=> 512000],
+        ['no'=>10, 'name'=>'10 STAR', 'threshold'=>50000000,     'income'=>1024000],
+        ['no'=>11, 'name'=>'11 STAR', 'threshold'=>100000000,    'income'=>2048000],
+        ['no'=>12, 'name'=>'12 STAR', 'threshold'=>200000000,    'income'=>4096000],
+    ];
+
     public function index(Request $request)
     {
         $user = Auth::user();
+        abort_unless($user, 401);
 
-        // preload relations if present
+        // preload relations if present (optional)
         $user->loadMissing([
             'sponsor:id,name,email',
             'leftChild:id,name,email',
             'rightChild:id,name,email',
         ]);
 
-        // Direct referrals (immediate)
-        $directReferrals = DB::table('users')->where('sponsor_id', $user->id)->count();
+        // Basic details
+        $raw = $user->toArray();
+        $mask = function (?string $v, int $keep = 2) {
+            if (!$v) return null;
+            $len = strlen($v);
+            if ($len <= 4) return str_repeat('*', $len);
+            return substr($v, 0, $keep) . str_repeat('*', max(0, $len - 2*$keep)) . substr($v, -$keep);
+        };
 
-        // My referral_id (this is the "code" others use in refer_by)
+        // Immediate counts / simple queries
+        $directReferrals = DB::table('users')->where('sponsor_id', $user->id)->count();
         $myReferralId = DB::table('users')->where('id', $user->id)->value('referral_id');
 
-        // Recent sells of the logged-in user
         $recentSells = DB::table('sell')
             ->where('buyer_id', $user->id)
             ->orderByDesc('id')
             ->limit(10)
             ->get(['id','buyer_id','product','amount','type','status','created_at']);
 
-        // --- Prepare recursive CTE only if we have a referral root ---
+        // Prepare recursive CTE only if we have a referral root
         $hasReferral = ! empty($myReferralId);
 
-        // Team sells (using propagated root_leg). Fallback: if no referral, keep existing behaviour (empty)
         $teamSells = collect();
         $teamLeftSells = collect();
         $teamRightSells = collect();
 
-        // CTE string reused at many places
         $teamCte = "
 WITH RECURSIVE team AS (
   SELECT id, referral_id, refer_by, position,
@@ -60,7 +83,7 @@ WITH RECURSIVE team AS (
 ";
 
         if ($hasReferral) {
-            // team sells (all legs) - recent 10
+            // recent team sells (all legs)
             $teamSellsSql = $teamCte . "
 SELECT
   s.id,
@@ -80,7 +103,7 @@ LIMIT 10
 ";
             $teamSells = collect(DB::select($teamSellsSql, [$myReferralId]));
 
-            // left sells (root_leg = 'L')
+            // left sells
             $teamLeftSql = $teamCte . "
 SELECT
   s.id,
@@ -101,7 +124,7 @@ LIMIT 10
 ";
             $teamLeftSells = collect(DB::select($teamLeftSql, [$myReferralId]));
 
-            // right sells (root_leg = 'R')
+            // right sells
             $teamRightSql = $teamCte . "
 SELECT
   s.id,
@@ -123,7 +146,7 @@ LIMIT 10
             $teamRightSells = collect(DB::select($teamRightSql, [$myReferralId]));
         }
 
-        // Immediate left/right users (if set)
+        // Immediate left/right users
         $leftUser  = $user->leftChild ? $user->leftChild->only(['id','name','email'])   : null;
         $rightUser = $user->rightChild ? $user->rightChild->only(['id','name','email']) : null;
 
@@ -138,24 +161,15 @@ LIMIT 10
             $refral  = '-';
         }
 
-        // Safe user objects
-        $raw = $user->toArray();
-        $mask = function (?string $v, int $keep = 2) {
-            if (!$v) return null;
-            $len = strlen($v);
-            if ($len <= 4) return str_repeat('*', $len);
-            return substr($v, 0, $keep) . str_repeat('*', max(0, $len - 2*$keep)) . substr($v, -$keep);
-        };
-
         // Wallets / payouts
-        $WalletAmount       = DB::table('wallet')->where('user_id', $user->id)->sum('amount');
-        $PayoutAmount       = DB::table('_payout')->where('user_id', $user->id)->sum('amount');
-        $PayoutAmountToday  = DB::table('_payout')
+        $WalletAmount       = (float) DB::table('wallet')->where('user_id', $user->id)->sum('amount');
+        $PayoutAmount       = (float) DB::table('_payout')->where('user_id', $user->id)->sum('amount');
+        $PayoutAmountToday  = (float) DB::table('_payout')
                                 ->where('user_id', $user->id)
                                 ->whereDate('created_at', Carbon::today())
                                 ->sum('amount');
 
-        // Total team count (using propagated CTE)
+        // Total team count (propagated CTE)
         $totalTeam = 0;
         if ($hasReferral) {
             $row = DB::selectOne("
@@ -249,27 +263,27 @@ LIMIT 10
             $timewiseSales['second_half']['right'] = (float) ($shRight->amt ?? 0);
 
         } else {
-            // Fallback to direct sponsor sums if no referral tree (kept from older behaviour)
-            $businessSummary['left']  = DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'L')->where('status', 'paid')->sum('amount');
-            $businessSummary['right'] = DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'R')->where('status', 'paid')->sum('amount');
+            // Fallback to direct sponsor sums if no referral tree
+            $businessSummary['left']  = (float) DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'L')->where('status', 'paid')->sum('amount');
+            $businessSummary['right'] = (float) DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'R')->where('status', 'paid')->sum('amount');
 
             $today = Carbon::today();
-            $timewiseSales['first_half']['left'] = DB::table('sell')
+            $timewiseSales['first_half']['left'] = (float) DB::table('sell')
                 ->where('sponsor_id', $user->id)->where('leg','L')->where('status','paid')
                 ->whereBetween('created_at', [$today->copy()->setTime(0,0,0), $today->copy()->setTime(11,59,59)])
                 ->sum('amount');
 
-            $timewiseSales['first_half']['right'] = DB::table('sell')
+            $timewiseSales['first_half']['right'] = (float) DB::table('sell')
                 ->where('sponsor_id', $user->id)->where('leg','R')->where('status','paid')
                 ->whereBetween('created_at', [$today->copy()->setTime(0,0,0), $today->copy()->setTime(11,59,59)])
                 ->sum('amount');
 
-            $timewiseSales['second_half']['left'] = DB::table('sell')
+            $timewiseSales['second_half']['left'] = (float) DB::table('sell')
                 ->where('sponsor_id', $user->id)->where('leg','L')->where('status','paid')
                 ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
                 ->sum('amount');
 
-            $timewiseSales['second_half']['right'] = DB::table('sell')
+            $timewiseSales['second_half']['right'] = (float) DB::table('sell')
                 ->where('sponsor_id', $user->id)->where('leg','R')->where('status','paid')
                 ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
                 ->sum('amount');
@@ -281,14 +295,72 @@ LIMIT 10
             'cf_right' => max($businessSummary['right'] - $businessSummary['left'], 0),
         ];
 
-        // Full user data (mask sensitive fields)
+        // Build star summary (placement downline totals / slabs) — use same CTE approach
+        $uid = (int) $user->id;
+        $rootRow = DB::table('users')->where('id', $uid)->select('left_user_id','right_user_id')->first();
+        $leftRoot  = (int)($rootRow->left_user_id ?? 0);
+        $rightRoot = (int)($rootRow->right_user_id ?? 0);
+
+        $placementCte = "
+WITH RECURSIVE team AS (
+  SELECT id, left_user_id, right_user_id, 'NA' AS root_leg
+  FROM users WHERE id = ?
+
+  UNION ALL
+
+  SELECT u.id, u.left_user_id, u.right_user_id,
+         CASE WHEN u.id = ? THEN 'L'
+              WHEN u.id = ? THEN 'R'
+              ELSE t.root_leg END AS root_leg
+  FROM users u
+  JOIN team t ON u.id IN (t.left_user_id, t.right_user_id)
+)
+";
+
+        $binds = [$uid, $leftRoot, $rightRoot];
+        $dateSql = '';
+        if ($request->query('from')) { $dateSql .= " AND DATE(s.created_at) >= ?"; $binds[] = $request->query('from'); }
+        if ($request->query('to'))   { $dateSql .= " AND DATE(s.created_at) <= ?"; $binds[] = $request->query('to'); }
+
+        $sql = $placementCte . "
+SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, SUM(s.amount) as amt
+FROM team t
+JOIN sell s ON s.buyer_id = t.id
+WHERE s.status='paid'
+  AND LOWER(s.type) IN ('silver','gold','diamond','repurchase')
+  {$dateSql}
+GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
+";
+        $placementRows = DB::select($sql, $binds);
+
+        $L2 = 0.0; $R2 = 0.0;
+        foreach ($placementRows as $r) {
+            if ($r->leg === 'L') $L2 = (float)$r->amt;
+            elseif ($r->leg === 'R') $R2 = (float)$r->amt;
+        }
+        $matched = min($L2, $R2);
+
+        // compute slabs progress using $this->slabs
+        $rows = array_map(function ($s) use ($matched) {
+            $s['achieved']  = $matched >= $s['threshold'];
+            $s['progress']  = max(0, min(100, $s['threshold'] > 0 ? ($matched / $s['threshold']) * 100 : 0));
+            $s['remaining'] = max(0, $s['threshold'] - $matched);
+            return $s;
+        }, $this->slabs);
+
+        $current = null;
+        foreach ($rows as $s) {
+            if ($s['achieved']) $current = $s;
+        }
+
+        // Build safe user objects
         $userAll = [
             'id'               => $user->id,
             'name'             => $user->name,
             'email'            => $user->email,
             'email_verified_at'=> $user->email_verified_at,
             'password'         => $mask($raw['password'] ?? '', 3),
-            'referral_id'      =>  $refral,
+            'referral_id'      => $refral,
             'refer_by'         => $user->refer_by,
             'parent_id'        => $user->parent_id,
             'position'         => $user->position,
@@ -302,10 +374,11 @@ LIMIT 10
         ];
 
         $userSafe = Arr::except($raw, ['password','remember_token','Password_plain']);
+
         $plan = DB::table('sell')->where('buyer_id', $user->id)->where('status', 'paid')->orderByDesc('id')->value('type');
 
-        // Add in props
-        return Inertia::render('Dashboard', [
+        // Final props
+        $props = [
             'user'             => $userSafe,
             'user_all'         => $userAll,
             'sponsor'          => $user->sponsor ? $user->sponsor->only(['id','name','email']) : null,
@@ -314,6 +387,9 @@ LIMIT 10
             'today_profit'     => $PayoutAmountToday,
             'total_team'       => $totalTeam,
             'current_plan'     => $plan,
+            'left'             => $L2,
+            'right'            => $R2,
+            'matched'          => $matched,
             'children'         => [
                 'left'  => $user->leftChild ? $user->leftChild->only(['id','name'])  : null,
                 'right' => $user->rightChild ? $user->rightChild->only(['id','name']) : null,
@@ -321,7 +397,6 @@ LIMIT 10
             'stats'            => [
                 'direct_referrals' => $directReferrals,
             ],
-
             'recent_sells'     => $recentSells,
             'team_sells'       => $teamSells,
             'team_left_sells'  => $teamLeftSells,
@@ -329,11 +404,17 @@ LIMIT 10
             'left_user'        => $leftUser,
             'right_user'       => $rightUser,
             'ref_link'         => $refLink,
+            'businessSummary'  => $businessSummary,
+            'timewiseSales'    => $timewiseSales,
+            'carryTotals'      => $carryTotals,
+            // star summary
+            'rows'             => $rows,
+            'current'          => $current,
+            'asOf'             => now()->toDateTimeString(),
+            'filters'          => ['from' => $request->query('from'), 'to' => $request->query('to')],
+        ];
 
-            // Summary tables for UI
-            'businessSummary'  => $businessSummary,     // lifetime (team-based)
-            'timewiseSales'    => $timewiseSales,       // first_half, second_half (team-based)
-            'carryTotals'      => $carryTotals,         // cf_left, cf_right
-        ]);
+        // Return single Inertia response for dashboard
+        return Inertia::render('Dashboard', $props);
     }
 }

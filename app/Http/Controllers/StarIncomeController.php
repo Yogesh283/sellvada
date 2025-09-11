@@ -102,5 +102,87 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             'rows'     => $rows,
             'current'  => $current,
         ]);
+
     }
+
+
+
+public function showw(Request $request): Response
+    {
+        $uid = (int) Auth::id();
+        abort_unless($uid, 401);
+
+        $from = $request->query('from');
+        $to   = $request->query('to');
+
+        // Build placement team (full downline of this user)
+        $rootRow = DB::table('users')->where('id', $uid)->select('left_user_id','right_user_id')->first();
+        $leftRoot  = (int)($rootRow->left_user_id ?? 0);
+        $rightRoot = (int)($rootRow->right_user_id ?? 0);
+
+        $teamCte = "
+WITH RECURSIVE team AS (
+  SELECT id, left_user_id, right_user_id, 'NA' AS root_leg
+  FROM users WHERE id = ?
+
+  UNION ALL
+
+  SELECT u.id, u.left_user_id, u.right_user_id,
+         CASE WHEN u.id = ? THEN 'L'
+              WHEN u.id = ? THEN 'R'
+              ELSE t.root_leg END AS root_leg
+  FROM users u
+  JOIN team t ON u.id IN (t.left_user_id, t.right_user_id)
+)
+";
+
+        $binds = [$uid, $leftRoot, $rightRoot];
+        $dateSql = '';
+        if ($from) { $dateSql .= " AND DATE(s.created_at) >= ?"; $binds[] = $from; }
+        if ($to)   { $dateSql .= " AND DATE(s.created_at) <= ?"; $binds[] = $to; }
+
+        // Get Left / Right total business of full team
+        $sql = $teamCte . "
+SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, SUM(s.amount) as amt
+FROM team t
+JOIN sell s ON s.buyer_id = t.id
+WHERE s.status='paid'
+  AND LOWER(s.type) IN ('silver','gold','diamond','repurchase')
+  {$dateSql}
+GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
+";
+        $rows = DB::select($sql, $binds);
+
+        $L = 0.0; $R = 0.0;
+        foreach ($rows as $r) {
+            if ($r->leg === 'L') $L = (float)$r->amt;
+            elseif ($r->leg === 'R') $R = (float)$r->amt;
+        }
+        $matched = min($L, $R);
+
+        // Slab status/progress
+        $rows = array_map(function ($s) use ($matched) {
+            $s['achieved']  = $matched >= $s['threshold'];
+            $s['progress']  = max(0, min(100, $s['threshold'] > 0 ? ($matched / $s['threshold']) * 100 : 0));
+            $s['remaining'] = max(0, $s['threshold'] - $matched);
+            return $s;
+        }, $this->slabs);
+
+        $current = null;
+        foreach ($rows as $s) {
+            if ($s['achieved']) $current = $s;
+        }
+
+        return Inertia::render('Dashboard', [
+            'asOf'     => now()->toDateTimeString(),
+            'filters'  => ['from'=>$from, 'to'=>$to],
+            'left'     => $L,
+            'right'    => $R,
+            'matched'  => $matched,
+            'rows'     => $rows,
+            'current'  => $current,
+        ]);
+
+    }
+
 }

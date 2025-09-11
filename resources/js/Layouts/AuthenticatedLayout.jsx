@@ -16,7 +16,7 @@ export default function AuthenticatedLayout({ header, children }) {
 
   const is = (name) => (typeof route !== 'undefined' ? route().current(name) : false);
 
-  // Safe href for Repurchase page (named route or plain path)
+  // Safe href for Repurchase page
   const repurchaseHref = (() => {
     try { return route('repurchase.index'); } catch { return '/repurchase'; }
   })();
@@ -27,7 +27,6 @@ export default function AuthenticatedLayout({ header, children }) {
   })();
 
   useEffect(() => {
-    // fetch the current balance if logged in
     if (!user) return;
     let mounted = true;
     const fetchBalance = async () => {
@@ -45,7 +44,6 @@ export default function AuthenticatedLayout({ header, children }) {
       }
     };
     fetchBalance();
-    // optional: refresh balance every 60s
     const iv = setInterval(fetchBalance, 60_000);
     return () => { mounted = false; clearInterval(iv); };
   }, [user]);
@@ -74,45 +72,22 @@ export default function AuthenticatedLayout({ header, children }) {
                   Products
                 </NavLink>
 
-                {/* Orders */}
-                <NavLink
-                  href={ordersHref}
-                  active={is('orders.index') || is('orders')}
-                  className="text-black"
-                >
+                <NavLink href={ordersHref} active={is('orders.index') || is('orders')} className="text-black">
                   Orders
                 </NavLink>
 
-                {/* Repurchase */}
-                <NavLink
-                  href={repurchaseHref}
-                  active={is('repurchase.index') || is('repurchase')}
-                  className="text-black"
-                >
+                <NavLink href={repurchaseHref} active={is('repurchase.index') || is('repurchase')} className="text-black">
                   Repurchase
                 </NavLink>
 
-                <NavLink
-                  href={route('wallet.deposit')}
-                  active={is('wallet.deposit')}
-                  className="text-black"
-                >
+                <NavLink href={route('wallet.deposit')} active={is('wallet.deposit')} className="text-black">
                   Deposit
                 </NavLink>
-                <NavLink
-                  href={route('wallet.withdraw')}
-                  active={is('wallet.withdraw')}
-                  className="text-black"
-                >
+                <NavLink href={route('wallet.withdraw')} active={is('wallet.withdraw')} className="text-black">
                   Withdraw
                 </NavLink>
 
-                {/* P2P Transfer */}
-                <NavLink
-                  href={route('p2p.transfer.page')}
-                  active={is('p2p.transfer.page')}
-                  className="text-black"
-                >
+                <NavLink href={route('p2p.transfer.page')} active={is('p2p.transfer.page')} className="text-black">
                   P2P Transfer
                 </NavLink>
               </div>
@@ -139,79 +114,70 @@ export default function AuthenticatedLayout({ header, children }) {
                     </svg>
                   </button>
 
-                  {/* Desktop panel */}
+                  {/* Desktop panel (compact) */}
                   {panelOpen && (
                     <div
-                      className="absolute right-0 top-12 w-80 rounded-xl border border-gray-200 bg-white shadow-xl"
+                      className="absolute right-0 top-12 w-44 rounded-lg border border-gray-200 bg-white shadow-lg text-sm"
                       onMouseLeave={() => setPanelOpen(false)}
+                      role="menu"
+                      aria-orientation="vertical"
+                      aria-labelledby="user-menu"
                     >
-                      <div className="px-4 py-4 border-b border-gray-200">
-                        <div className="text-lg font-bold text-gray-900">{user.name}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
-                        <div className="text-sm text-gray-600 mt-1">User ID: {user.id}</div>
-                        <div className="text-sm text-gray-700 mt-2">
-                          Available Balance:{' '}
-                          <span className="font-semibold">{balanceLoading ? '…' : Number(balance || 0).toFixed(2)}</span>
+                      <div className="px-3 py-3 border-b border-gray-200">
+                        <div className="text-sm font-semibold text-gray-900 truncate">{user.name}</div>
+                        <div className="text-xs text-gray-500 truncate">{user.email}</div>
+                        <div className="text-xs text-gray-600 mt-1">ID: {user.id}</div>
+                        <div className="text-xs text-gray-700 mt-2">
+                          Balance:{" "}
+                          <span className="font-medium">
+                            {balanceLoading ? "…" : Number(balance || 0).toFixed(2)}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="space-y-1 px-2 pt-2 pb-3">
-                        <DesktopMenuLink href={route('dashboard')} active={is('dashboard')} onClick={() => setPanelOpen(false)}>
+                      <div className="space-y-0.5 px-1 pt-1 pb-1">
+                        <DesktopMenuLinkCompact href={route('dashboard')} active={is('dashboard')} onClick={() => setPanelOpen(false)}>
                           Dashboard
-                        </DesktopMenuLink>
-
-                        <DesktopMenuLink href="/" active={is('home')} onClick={() => setPanelOpen(false)}>
+                        </DesktopMenuLinkCompact>
+                        <DesktopMenuLinkCompact href="/" active={is('home')} onClick={() => setPanelOpen(false)}>
                           Products
-                        </DesktopMenuLink>
-
-                        {/* Orders */}
-                        <DesktopMenuLink href={ordersHref} active={is('orders.index') || is('orders')} onClick={() => setPanelOpen(false)}>
+                        </DesktopMenuLinkCompact>
+                        <DesktopMenuLinkCompact href={ordersHref} active={is('orders.index') || is('orders')} onClick={() => setPanelOpen(false)}>
                           Orders
-                        </DesktopMenuLink>
-
-                        {/* Cart (if used) */}
-                        <DesktopMenuLink href="/card" active={is && is('card')} onClick={() => setPanelOpen(false)}>
+                        </DesktopMenuLinkCompact>
+                        <DesktopMenuLinkCompact href="/card" active={is && is('card')} onClick={() => setPanelOpen(false)}>
                           Cart
-                        </DesktopMenuLink>
-
-                        {/* Repurchase */}
-                        <DesktopMenuLink
-                          href={repurchaseHref}
-                          active={is('repurchase.index') || is('repurchase')}
-                          onClick={() => setPanelOpen(false)}
-                        >
+                        </DesktopMenuLinkCompact>
+                        <DesktopMenuLinkCompact href={repurchaseHref} active={is('repurchase.index') || is('repurchase')} onClick={() => setPanelOpen(false)}>
                           Repurchase
-                        </DesktopMenuLink>
-
-                        <DesktopMenuLink href={route('wallet.deposit')} active={is('wallet.deposit')} onClick={() => setPanelOpen(false)}>
+                        </DesktopMenuLinkCompact>
+                        <DesktopMenuLinkCompact href={route('wallet.deposit')} active={is('wallet.deposit')} onClick={() => setPanelOpen(false)}>
                           Deposit
-                        </DesktopMenuLink>
-                        <DesktopMenuLink href={route('wallet.withdraw')} active={is('wallet.withdraw')} onClick={() => setPanelOpen(false)}>
+                        </DesktopMenuLinkCompact>
+                        <DesktopMenuLinkCompact href={route('wallet.withdraw')} active={is('wallet.withdraw')} onClick={() => setPanelOpen(false)}>
                           Withdrawal
-                        </DesktopMenuLink>
-
-                        {/* P2P Transfer */}
-                        <DesktopMenuLink href={route('p2p.transfer.page')} active={is('p2p.transfer.page')} onClick={() => setPanelOpen(false)}>
+                        </DesktopMenuLinkCompact>
+                        <DesktopMenuLinkCompact href={route('p2p.transfer.page')} active={is('p2p.transfer.page')} onClick={() => setPanelOpen(false)}>
                           P2P Transfer
-                        </DesktopMenuLink>
+                        </DesktopMenuLinkCompact>
                       </div>
 
-                      <div className="border-t border-gray-200 px-4 py-3">
+                      <div className="border-t border-gray-200 px-2 py-2">
                         <Link
                           href={route('profile.edit')}
-                          className="block rounded-md px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          className="block rounded-md px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                           onClick={() => setPanelOpen(false)}
                         >
                           Profile
                         </Link>
                       </div>
 
-                      <div className="border-t border-gray-200 px-4 py-3">
+                      <div className="border-t border-gray-200 px-2 py-2">
                         <Link
                           method="post"
                           href={route('logout')}
                           as="button"
-                          className="w-full text-left rounded-md px-2 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                          className="w-full text-left rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
                         >
                           Logout
                         </Link>
@@ -237,7 +203,7 @@ export default function AuthenticatedLayout({ header, children }) {
               )}
             </div>
 
-            {/* Mobile: show username before hamburger */}
+            {/* Mobile: show username */}
             {user && (
               <div className="sm:hidden text-sm font-medium text-gray-700 mr-2 truncate max-w-[120px]">
                 {user.name}
@@ -275,7 +241,6 @@ export default function AuthenticatedLayout({ header, children }) {
                       <div className="text-sm text-gray-500">{user.email}</div>
                       <div className="text-sm text-gray-600 mt-1">User ID: {user.id}</div>
                     </div>
-
                     <div className="text-right">
                       <div className="text-xs text-gray-500">Balance</div>
                       <div className="text-sm font-semibold">{balanceLoading ? '…' : Number(balance || 0).toFixed(2)}</div>
@@ -286,34 +251,13 @@ export default function AuthenticatedLayout({ header, children }) {
             </div>
 
             <div className="space-y-1 px-2 pt-2 pb-3">
-              <ResponsiveNavLink href={route('dashboard')} active={is('dashboard')}>
-                Dashboard
-              </ResponsiveNavLink>
-              <ResponsiveNavLink href="/" active={is('home')}>
-                Products
-              </ResponsiveNavLink>
-
-              {/* Orders */}
-              <ResponsiveNavLink href={ordersHref} active={is('orders.index') || is('orders')}>
-                Orders
-              </ResponsiveNavLink>
-
-              {/* Repurchase */}
-              <ResponsiveNavLink href={repurchaseHref} active={is('repurchase.index') || is('repurchase')}>
-                Repurchase
-              </ResponsiveNavLink>
-
-              <ResponsiveNavLink href={route('wallet.deposit')} active={is('wallet.deposit')}>
-                Deposit
-              </ResponsiveNavLink>
-              <ResponsiveNavLink href={route('wallet.withdraw')} active={is('wallet.withdraw')}>
-                Withdrawal
-              </ResponsiveNavLink>
-
-              {/* P2P Transfer */}
-              <ResponsiveNavLink href={route('p2p.transfer.page')} active={is('p2p.transfer.page')}>
-                P2P Transfer
-              </ResponsiveNavLink>
+              <ResponsiveNavLink href={route('dashboard')} active={is('dashboard')}>Dashboard</ResponsiveNavLink>
+              <ResponsiveNavLink href="/" active={is('home')}>Products</ResponsiveNavLink>
+              <ResponsiveNavLink href={ordersHref} active={is('orders.index') || is('orders')}>Orders</ResponsiveNavLink>
+              <ResponsiveNavLink href={repurchaseHref} active={is('repurchase.index') || is('repurchase')}>Repurchase</ResponsiveNavLink>
+              <ResponsiveNavLink href={route('wallet.deposit')} active={is('wallet.deposit')}>Deposit</ResponsiveNavLink>
+              <ResponsiveNavLink href={route('wallet.withdraw')} active={is('wallet.withdraw')}>Withdrawal</ResponsiveNavLink>
+              <ResponsiveNavLink href={route('p2p.transfer.page')} active={is('p2p.transfer.page')}>P2P Transfer</ResponsiveNavLink>
             </div>
 
             <div className="border-t border-gray-200 px-4 py-3">
@@ -349,9 +293,9 @@ export default function AuthenticatedLayout({ header, children }) {
   );
 }
 
-/* --- helpers for desktop panel links (same visual as ResponsiveNavLink) --- */
-function DesktopMenuLink({ href, active, children, onClick }) {
-  const base = 'block rounded-md px-3 py-2 text-sm font-medium transition';
+/* --- compact menu link --- */
+function DesktopMenuLinkCompact({ href, active, children, onClick }) {
+  const base = 'block rounded-md px-2 py-1 text-xs transition';
   const activeCls = 'bg-indigo-50 text-indigo-700';
   const idleCls = 'text-gray-700 hover:bg-gray-50';
   return (
