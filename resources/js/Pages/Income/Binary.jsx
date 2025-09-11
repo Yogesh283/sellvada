@@ -192,8 +192,6 @@ export default function Binary() {
                   <th className="px-5 py-3">Left (Orders • Amount)</th>
                   <th className="px-5 py-3">Right (Orders • Amount)</th>
                   <th className="px-5 py-3">Matched (Amount)</th>
-                  <th className="px-5 py-3">Carry Fwd L</th>
-                  <th className="px-5 py-3">Carry Fwd R</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -227,8 +225,7 @@ export default function Binary() {
                       </td>
 
                       <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(row.matched)}</td>
-                      <td className="px-5 py-3 tabular-nums">₹{fmtAmt(row.cf_left)}</td>
-                      <td className="px-5 py-3 tabular-nums">₹{fmtAmt(row.cf_right)}</td>
+                     
                     </tr>
                   );
                 })}
@@ -254,8 +251,8 @@ export default function Binary() {
                     </div>
                   </td>
                   <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(grand.m)}</td>
-                  <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(grand.cfL)}</td>
-                  <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(grand.cfR)}</td>
+                  {/* <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(grand.cfL)}</td>
+                  <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(grand.cfR)}</td> */}
                 </tr>
               </tfoot>
             </table>

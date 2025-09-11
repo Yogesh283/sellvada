@@ -88,13 +88,8 @@ export default function Repurchase({ product, walletBalance = 0, defaultAddress 
     );
   };
 
-  // Cart state
+  // Cart state (kept for optional multi-item checkout)
   const [items, setItems] = useState([]);
-  const add = (p) => setItems((arr) => {
-    const f = arr.find((x) => x.id === p.id);
-    if (f) return arr.map(x => x.id === p.id ? { ...x, qty: x.qty + 1 } : x);
-    return [...arr, { id: p.id, name: p.name, img: p.img, variant: p.variant || null, price: Number(p.price), qty: 1, type: "repurchase" }];
-  });
   const inc = (id) => setItems((arr) => arr.map(it => it.id === id ? { ...it, qty: it.qty + 1 } : it));
   const dec = (id) => setItems((arr) => arr.map(it => it.id === id && it.qty > 1 ? { ...it, qty: it.qty - 1 } : it));
   const removeItem = (id) => setItems((arr) => arr.filter(it => it.id !== id));
@@ -109,7 +104,7 @@ export default function Repurchase({ product, walletBalance = 0, defaultAddress 
     if (code === "FLAT10") setAppliedCoupon(code); else setAppliedCoupon(null);
   };
 
-  // Totals
+  // Totals (for cart)
   const subTotal = useMemo(() => items.reduce((s, it) => s + Number(it.price) * Number(it.qty), 0), [items]);
   const discount = useMemo(() => (appliedCoupon === "FLAT10" ? Math.round(subTotal * 0.1) : 0), [appliedCoupon, subTotal]);
   const grand = Math.max(0, subTotal - discount);
@@ -120,33 +115,76 @@ export default function Repurchase({ product, walletBalance = 0, defaultAddress 
   const [popup, setPopup] = useState({ show: false, title: "", message: "", tone: "neutral" });
   const showPopup = (title, message, tone = "success") => setPopup({ show: true, title, message, tone });
 
-  // Checkout
-  const onCheckout = () => {
-    if (!items.length) return showPopup("Cart Empty", "Please add items to cart.", "error");
-    if (!defaultAddress) return showPopup("No Address", "Please add a shipping address before checkout.", "error");
-    if (walletBalance < Number(grand)) return showPopup("Insufficient Balance", `Need ${formatINR(grand)} in wallet.`, "error");
-
+  // Helper to perform purchase via Inertia router.post
+  const performPurchase = (payload, onSuccessMsg = null) => {
+    setProcessing(true);
     router.post(
       route("repurchase.repurchaseOrder"),
-      { items, coupon: appliedCoupon, shipping: 0 }, // pass shipping (0 or actual)
+      payload,
       {
         preserveScroll: true,
         onStart: () => setProcessing(true),
         onFinish: () => setProcessing(false),
         onSuccess: () => {
-          const orderSummary = items.map(it => `${it.name} x ${it.qty} = ${formatINR(it.price * it.qty)}`).join("\n");
-          setItems([]);
+          // success UI: show summary popup
+          const itemsList = (payload.items || []).map(it => `${it.name || it.id} x ${it.qty} = ${formatINR(it.price * it.qty)}`).join("\n");
+          // clear cart if purchase came from cart
+          if (!payload.skip_clear_cart) setItems([]);
           setAppliedCoupon(null);
           setCoupon("");
-          showPopup("Order Success", `Repurchase order placed!\n\n${orderSummary}\n\nTotal: ${formatINR(grand)}`, "success");
+          showPopup("Order Success", `${onSuccessMsg ?? "Repurchase order placed!"}\n\n${itemsList}\n\nTotal: ${formatINR(payload.total || (payload.items || []).reduce((s,i)=>s + i.price*i.qty,0))}`, "success");
         },
         onError: (err) => {
+          console.error("Order error:", err);
           // Try to show server-side validation message if present
-          const msg = err?.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(" | ") : "Something went wrong.";
+          let msg = "Something went wrong.";
+          if (err?.response?.data?.errors) {
+            msg = Object.values(err.response.data.errors).flat().join(" | ");
+          } else if (err?.response?.data?.message) {
+            msg = err.response.data.message;
+          }
           showPopup("Checkout Failed", msg, "error");
         },
       }
     );
+  };
+
+  // NEW: direct buy for single product (qty = 1) — used by Add button and Buy Now
+  const buyNowSingle = (p) => {
+    // checks same as onCheckout
+    if (!defaultAddress) return showPopup("No Address", "Please add a shipping address before checkout.", "error");
+
+    const qty = 1;
+    const itemTotal = Number(p.price) * qty;
+    // apply coupon if you want to support coupon on single-item direct purchase
+    const discountForThis = (appliedCoupon === "FLAT10") ? Math.round(itemTotal * 0.1) : 0;
+    const totalToPay = Math.max(0, itemTotal - discountForThis);
+
+    if (walletBalance < Number(totalToPay)) {
+      return showPopup("Insufficient Balance", `Need ${formatINR(totalToPay)} in wallet.`, "error");
+    }
+
+    const payload = {
+      items: [{ id: p.id, name: p.name, img: p.img, variant: p.variant || null, price: Number(p.price), qty: qty, type: "repurchase" }],
+      coupon: appliedCoupon,
+      shipping: 0,
+      total: totalToPay,
+      // include a flag so performPurchase knows not to clear cart (we didn't add)
+      skip_clear_cart: true,
+    };
+
+    performPurchase(payload, `Repurchase of ${p.name} (x${qty}) successful.`);
+  };
+
+  // OLD: cart-based checkout (kept for compatibility)
+  const onCheckout = () => {
+    if (!items.length) return showPopup("Cart Empty", "Please add items to cart.", "error");
+    if (!defaultAddress) return showPopup("No Address", "Please add a shipping address before checkout.", "error");
+    if (walletBalance < Number(grand)) return showPopup("Insufficient Balance", `Need ${formatINR(grand)} in wallet.`, "error");
+
+    const payload = { items, coupon: appliedCoupon, shipping: 0, total: grand };
+    // don't skip_clear_cart: we want to clear cart after success
+    performPurchase(payload, "Repurchase order placed!");
   };
 
   return (
@@ -178,13 +216,17 @@ export default function Repurchase({ product, walletBalance = 0, defaultAddress 
               </div>
 
               <div className="mt-4 flex w-full flex-col sm:flex-row gap-2">
-                <button onClick={() => add(product)} className="w-full sm:w-auto rounded-lg border border-indigo-600 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50" type="button">Add to Cart</button>
-                <button onClick={onCheckout} disabled={processing} className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:from-indigo-700 hover:to-blue-700 disabled:opacity-60" type="button">{processing ? "Processing..." : "Buy Now"}</button>
+                {/* Changed: Add to Cart now triggers direct buy (qty = 1) */}
+                {/* <button onClick={() => buyNowSingle(product)} className="w-full sm:w-auto rounded-lg border border-indigo-600 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50" type="button">Buy 1 Now</button> */}
+
+                {/* Keep existing Buy Now button (also direct buy) */}
+                <button onClick={() => buyNowSingle(product)} disabled={processing} className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:from-indigo-700 hover:to-blue-700 disabled:opacity-60" type="button">{processing ? "Processing..." : "Buy Now"}</button>
               </div>
             </div>
           </div>
         </section>
 
+        {/* Cart UI kept — user can still use it if items were added by other flows */}
         {items.length > 0 && (
           <section className="rounded-2xl bg-white p-4 sm:p-6 shadow ring-1 ring-slate-100">
             <h3 className="text-lg font-semibold mb-3">Cart</h3>

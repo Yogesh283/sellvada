@@ -10,10 +10,8 @@ use Inertia\Response;
 
 class StarIncomeController extends Controller
 {
-    // sell.type me jin types ko matching volume me include karna hai:
     private array $includeTypes = ['silver','gold','diamond','repurchase'];
 
-    // Image ke hisaab se fixed slabs (threshold = total matching volume in INR)
     private array $slabs = [
         ['no'=>1,  'name'=>'1 STAR',  'threshold'=> 100000,      'income'=>   2000],
         ['no'=>2,  'name'=>'2 STAR',  'threshold'=> 200000,      'income'=>   4000],
@@ -21,18 +19,14 @@ class StarIncomeController extends Controller
         ['no'=>4,  'name'=>'4 STAR',  'threshold'=> 800000,      'income'=>  16000],
         ['no'=>5,  'name'=>'5 STAR',  'threshold'=>1600000,      'income'=>  32000],
         ['no'=>6,  'name'=>'6 STAR',  'threshold'=>3200000,      'income'=>  64000],
-        ['no'=>7,  'name'=>'7 STAR',  'threshold'=>6400000,      'income'=> 128000],   // 1.28 Lac
-        ['no'=>8,  'name'=>'8 STAR',  'threshold'=>12800000,     'income'=> 256000],   // 1.28 Cr / 2.56 Lac
-        ['no'=>9,  'name'=>'9 STAR',  'threshold'=>25000000,     'income'=> 512000],   // 2.5 Cr / 5.12 Lac
-        ['no'=>10, 'name'=>'10 STAR', 'threshold'=>50000000,     'income'=>1024000],   // 5 Cr / 10.24 Lac
-        ['no'=>11, 'name'=>'11 STAR', 'threshold'=>100000000,    'income'=>2048000],   // 10 Cr / 20.48 Lac
-        ['no'=>12, 'name'=>'12 STAR', 'threshold'=>200000000,    'income'=>4096000],   // 20 Cr / 40.96 Lac
+        ['no'=>7,  'name'=>'7 STAR',  'threshold'=>6400000,      'income'=> 128000],
+        ['no'=>8,  'name'=>'8 STAR',  'threshold'=>12800000,     'income'=> 256000],
+        ['no'=>9,  'name'=>'9 STAR',  'threshold'=>25000000,     'income'=> 512000],
+        ['no'=>10, 'name'=>'10 STAR', 'threshold'=>50000000,     'income'=>1024000],
+        ['no'=>11, 'name'=>'11 STAR', 'threshold'=>100000000,    'income'=>2048000],
+        ['no'=>12, 'name'=>'12 STAR', 'threshold'=>200000000,    'income'=>4096000],
     ];
 
-    /**
-     * Table-only page: fixed ranks + user ka total matching volume.
-     * Optional filters: ?from=YYYY-MM-DD&to=YYYY-MM-DD
-     */
     public function show(Request $request): Response
     {
         $uid = (int) Auth::id();
@@ -41,33 +35,59 @@ class StarIncomeController extends Controller
         $from = $request->query('from');
         $to   = $request->query('to');
 
-        // Lifetime (or filtered) L/R volume from `sell` table for this sponsor
-        $q = DB::table('sell')
-            ->select('leg', DB::raw('SUM(amount) as amt'))
-            ->where('status', 'paid')
-            ->whereIn('type', $this->includeTypes)
-            ->where('sponsor_id', $uid);
+        // Build placement team (full downline of this user)
+        $rootRow = DB::table('users')->where('id', $uid)->select('left_user_id','right_user_id')->first();
+        $leftRoot  = (int)($rootRow->left_user_id ?? 0);
+        $rightRoot = (int)($rootRow->right_user_id ?? 0);
 
-        if ($from) $q->whereDate('created_at', '>=', $from);
-        if ($to)   $q->whereDate('created_at', '<=', $to);
+        $teamCte = "
+WITH RECURSIVE team AS (
+  SELECT id, left_user_id, right_user_id, 'NA' AS root_leg
+  FROM users WHERE id = ?
+
+  UNION ALL
+
+  SELECT u.id, u.left_user_id, u.right_user_id,
+         CASE WHEN u.id = ? THEN 'L'
+              WHEN u.id = ? THEN 'R'
+              ELSE t.root_leg END AS root_leg
+  FROM users u
+  JOIN team t ON u.id IN (t.left_user_id, t.right_user_id)
+)
+";
+
+        $binds = [$uid, $leftRoot, $rightRoot];
+        $dateSql = '';
+        if ($from) { $dateSql .= " AND DATE(s.created_at) >= ?"; $binds[] = $from; }
+        if ($to)   { $dateSql .= " AND DATE(s.created_at) <= ?"; $binds[] = $to; }
+
+        // Get Left / Right total business of full team
+        $sql = $teamCte . "
+SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, SUM(s.amount) as amt
+FROM team t
+JOIN sell s ON s.buyer_id = t.id
+WHERE s.status='paid'
+  AND LOWER(s.type) IN ('silver','gold','diamond','repurchase')
+  {$dateSql}
+GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
+";
+        $rows = DB::select($sql, $binds);
 
         $L = 0.0; $R = 0.0;
-        foreach ($q->groupBy('leg')->get() as $r) {
-            $leg = strtoupper((string)($r->leg ?? ''));
-            if ($leg === 'L') $L = (float)$r->amt;
-            if ($leg === 'R') $R = (float)$r->amt;
+        foreach ($rows as $r) {
+            if ($r->leg === 'L') $L = (float)$r->amt;
+            elseif ($r->leg === 'R') $R = (float)$r->amt;
         }
         $matched = min($L, $R);
 
-        // Slabs me status/progress add karo
+        // Slab status/progress
         $rows = array_map(function ($s) use ($matched) {
-            $s['achieved'] = $matched >= $s['threshold'];
-            $s['progress'] = max(0, min(100, $s['threshold'] > 0 ? ($matched / $s['threshold']) * 100 : 0));
+            $s['achieved']  = $matched >= $s['threshold'];
+            $s['progress']  = max(0, min(100, $s['threshold'] > 0 ? ($matched / $s['threshold']) * 100 : 0));
             $s['remaining'] = max(0, $s['threshold'] - $matched);
             return $s;
         }, $this->slabs);
 
-        // Highest achieved
         $current = null;
         foreach ($rows as $s) {
             if ($s['achieved']) $current = $s;
@@ -75,12 +95,12 @@ class StarIncomeController extends Controller
 
         return Inertia::render('Income/Star', [
             'asOf'     => now()->toDateTimeString(),
-            'filters'  => ['from' => $from, 'to' => $to],
+            'filters'  => ['from'=>$from, 'to'=>$to],
             'left'     => $L,
             'right'    => $R,
             'matched'  => $matched,
             'rows'     => $rows,
-            'current'  => $current,   // null or last achieved slab
+            'current'  => $current,
         ]);
     }
 }

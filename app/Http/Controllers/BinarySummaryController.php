@@ -7,19 +7,23 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Carbon\Carbon;
 
 class BinarySummaryController extends Controller
 {
     /**
      * Return summary array for a given rootId and type ('placement'|'referral').
+     * Now supports datetime range filtering using s.created_at >= ? AND s.created_at <= ?
+     *
+     * $from and $to should be datetimes (Y-m-d H:i:s) or null.
      */
     public static function getSummaryForRoot(int $rootId, string $type = 'placement', ?string $from = null, ?string $to = null): array
     {
-        // date filter for sells
+        // Use datetime filters on s.created_at (server timezone)
         $dateSql = '';
         $dateBinds = [];
-        if ($from) { $dateSql .= " AND DATE(s.created_at) >= ?"; $dateBinds[] = $from; }
-        if ($to)   { $dateSql .= " AND DATE(s.created_at) <= ?"; $dateBinds[] = $to; }
+        if ($from) { $dateSql .= " AND s.created_at >= ?"; $dateBinds[] = $from; }
+        if ($to)   { $dateSql .= " AND s.created_at <= ?"; $dateBinds[] = $to; }
 
         // Prepare defaults
         $recent = [];
@@ -108,7 +112,6 @@ GROUP BY x.type, x.root_leg
             if ($rk === '') $rk = 'other';
             if (!isset($matrix[$rk])) $matrix[$rk] = $emptyRow;
 
-            // SQL alias is `root_leg`
             $leg = strtoupper((string)($r->root_leg ?? 'NA'));
             if ($leg === 'L') {
                 $matrix[$rk]['left'] += (float)($r->amount ?? 0.0);
@@ -245,6 +248,11 @@ SELECT COUNT(*) AS cnt FROM sub
 
     /**
      * Show binary summary page (Inertia).
+     * Supports query params:
+     *  - root (int)
+     *  - type (placement|referral)
+     *  - date (Y-m-d) optional, defaults to today
+     *  - shift (1 or 2) optional, defaults to 1
      */
     public function show(Request $request): Response
     {
@@ -254,16 +262,31 @@ SELECT COUNT(*) AS cnt FROM sub
         $rootId = (int) ($request->query('root') ?? $userId);
         $type   = strtolower($request->query('type', 'placement')); // placement | referral
 
-        $from = $request->query('from');
-        $to   = $request->query('to');
+        // SHIFT handling
+        $dateParam = $request->query('date', now()->toDateString()); // expected 'YYYY-MM-DD'
+        $shift = (int) $request->query('shift', 1);
 
-        // get summary (reuse logic)
+        // IMPORTANT: adjust timezone here if you want user-local shifts.
+        // e.g. $tz = 'Asia/Kolkata'; Carbon::parse($dateParam, $tz) ...
+        $base = Carbon::parse($dateParam);
+
+        if ($shift === 1) {
+            // 12:00 AM -> 11:59:59 AM
+            $from = $base->copy()->startOfDay()->toDateTimeString();       // 00:00:00
+            $to   = $base->copy()->setTime(11,59,59)->toDateTimeString();  // 11:59:59
+        } else {
+            // shift 2: 12:00 PM -> 11:59:59 PM
+            $from = $base->copy()->setTime(12,0,0)->toDateTimeString();   // 12:00:00
+            $to   = $base->copy()->endOfDay()->toDateTimeString();        // 23:59:59
+        }
+
+        // get summary (reuse logic) using datetime bounds
         $summary = self::getSummaryForRoot($rootId, $type, $from, $to);
 
         // render inertia with the full data
         return Inertia::render('Income/Binary', [
             'asOf'        => now()->toDateTimeString(),
-            'filters'     => ['from'=>$from, 'to'=>$to],
+            'filters'     => ['date'=>$dateParam, 'shift'=>$shift, 'from'=>$from, 'to'=>$to],
             'totals'      => $summary['totals'],
             'matrix'      => $summary['matrix'],
             'recent'      => $summary['recent'],

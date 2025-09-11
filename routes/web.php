@@ -165,9 +165,9 @@ Route::middleware(['auth','verified'])->group(function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/repurchase', [RepurchaseController::class, 'index'])
         ->name('repurchase.index');
-Route::post('/repurchase/checkout', [RepurchaseController::class, 'repurchaseOrder'])
-    ->name('repurchase.repurchaseOrder');
 
+    Route::post('/repurchase/checkout', [RepurchaseController::class, 'repurchaseOrder'])
+        ->name('repurchase.repurchaseOrder');
 });
 
 
