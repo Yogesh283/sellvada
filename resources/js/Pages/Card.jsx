@@ -258,7 +258,7 @@ export default function Card({ items: serverItems = null }) {
                 </div>
 
                 {/* Coupon */}
-                <form onSubmit={applyCoupon} className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                {/* <form onSubmit={applyCoupon} className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                   <input
                     value={coupon}
                     onChange={(e) => setCoupon(e.target.value)}
@@ -269,7 +269,7 @@ export default function Card({ items: serverItems = null }) {
                   />
                   <button type="submit" className="w-full sm:w-auto rounded-lg bg-sky-600 px-4 py-2.5 text-white text-sm font-semibold hover:bg-sky-700">Apply</button>
                   {appliedCoupon && <span className="text-xs font-medium text-emerald-700">Applied: {appliedCoupon}</span>}
-                </form>
+                </form> */}
               </>
             )}
           </section>

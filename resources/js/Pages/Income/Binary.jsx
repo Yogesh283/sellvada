@@ -176,7 +176,7 @@ export default function Binary() {
         {/* Rank-wise table (without "other") */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b px-5 py-4">
-            <h2 className="font-semibold text-gray-900">Rank-wise Summary</h2>
+            <h2 className="font-semibold text-gray-900">Binary-wise Summary</h2>
             <div className="hidden sm:flex items-center gap-2 text-xs">
               {RANKS.map((r) => (
                 <RankPill key={r} rank={r} />

@@ -215,12 +215,36 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+        
+<div className={`relative rounded-lg ${G.purpleIndigo} shadow-sm overflow-hidden border border-slate-200 p-4`}>
+  {/* Title */}
+  <p className="text-center text-2xl text-white">Star Rank Value</p>
+
+  {/* View button top-right corner */}
+  <button className="absolute top-4 right-4 rounded bg-white px-5 py-2 text-pink-500 text-sm font-semibold hover:bg-slate-200">
+    <a href="/income/star" className="font-bold">View</a>
+  </button>
+
+  {/* Grid responsive layout */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+    <div className="bg-white shadow rounded-xl p-6 w-full">
+      <div className="text-xs text-gray-500">Left Volume</div>
+      <div className="text-2xl font-bold">{Number(left)}</div>
+    </div>
+    <div className="bg-white shadow rounded-xl p-6 w-full">
+      <div className="text-xs text-gray-500">Right Volume</div>
+      <div className="text-2xl font-bold">{Number(right)}</div>
+    </div>
+  </div>
+</div>
+
+
 
         {/* Top metric cards (colorful) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard title="Binary Matching" value="" icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
           <StatCard title="VIP Repurchase Salary" value=" " icon="📍" actionHref="/income/vip-repurchase-salary" gradient={G.amber} />
-          <StatCard title="Star Matching" value="" icon="💸" actionHref="/income/star" gradient={G.purpleIndigo} />
+          {/* <StatCard title="Star Matching" value="" icon="💸" actionHref="/income/star" gradient={G.purpleIndigo} /> */}
           <StatCard title="Wallet Balance" value={availableBalance} icon="👛" gradient={G.tealBlue} />
           <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" gradient={G.emerald} />
           <StatCard title="MY PROFILE" value=" " icon="👤" actionHref="/profile" gradient={G.sky} />
@@ -228,24 +252,6 @@ export default function Dashboard() {
           <StatCard title="MY TEAM" value={TotalTeam} icon="👥" actionHref="/team" gradient={G.lime} />
         </div>
 
- <div className="rounded-lg bg-pink-500 shadow-sm overflow-hidden border border-slate-200 p-4 space-y-4">
-  <p className="text-center text-2xl text-white text-pretty ">Star Rank Value</p>
-       <div className="grid md:grid-cols-3 gap-4">
-          <div className="bg-white shadow rounded-xl p-4">
-            <div className="text-xs text-gray-500">Left Volume</div>
-            <div className="text-xl font-semibold">{Number(left)}</div>
-          </div>
-          <div className="bg-white shadow rounded-xl p-4">
-            <div className="text-xs text-gray-500">Right Volume</div>
-            <div className="text-xl font-semibold">{Number(right)}</div>
-          </div>
-          {/* <div className="bg-white shadow rounded-xl p-4">
-            <div className="text-xs text-gray-500">Total Matching Volume</div>
-            <div className="text-xl font-semibold">{Number(matched)}</div>
-          </div> */}
-        </div>
-
-        </div>
 
 
 
