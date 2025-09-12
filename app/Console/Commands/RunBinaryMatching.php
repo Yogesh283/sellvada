@@ -223,7 +223,7 @@ class RunBinaryMatching extends Command
                         'to_user_id'   => $sid,
                         'from_user_id' => $triggerBuyerId,
                         'amount'       => $gross,
-                        'status'       => 'pending',
+                        'status'       => 'paid',
                         'method'       => $method,
                         'type'         => 'binary_matching',
                         'created_at'   => now(),

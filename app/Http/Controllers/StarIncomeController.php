@@ -12,20 +12,21 @@ class StarIncomeController extends Controller
 {
     private array $includeTypes = ['silver','gold','diamond','repurchase'];
 
-    private array $slabs = [
-        ['no'=>1,  'name'=>'1 STAR',  'threshold'=> 100000,      'income'=>   2000],
-        ['no'=>2,  'name'=>'2 STAR',  'threshold'=> 200000,      'income'=>   4000],
-        ['no'=>3,  'name'=>'3 STAR',  'threshold'=> 400000,      'income'=>   8000],
-        ['no'=>4,  'name'=>'4 STAR',  'threshold'=> 800000,      'income'=>  16000],
-        ['no'=>5,  'name'=>'5 STAR',  'threshold'=>1600000,      'income'=>  32000],
-        ['no'=>6,  'name'=>'6 STAR',  'threshold'=>3200000,      'income'=>  64000],
-        ['no'=>7,  'name'=>'7 STAR',  'threshold'=>6400000,      'income'=> 128000],
-        ['no'=>8,  'name'=>'8 STAR',  'threshold'=>12800000,     'income'=> 256000],
-        ['no'=>9,  'name'=>'9 STAR',  'threshold'=>25000000,     'income'=> 512000],
-        ['no'=>10, 'name'=>'10 STAR', 'threshold'=>50000000,     'income'=>1024000],
-        ['no'=>11, 'name'=>'11 STAR', 'threshold'=>100000000,    'income'=>2048000],
-        ['no'=>12, 'name'=>'12 STAR', 'threshold'=>200000000,    'income'=>4096000],
-    ];
+   private array $slabs = [
+    ['no'=>1,  'name'=>'1 STAR',  'threshold'=> 100000,      'income'=>   5000],
+    ['no'=>2,  'name'=>'2 STAR',  'threshold'=> 200000,      'income'=>  10000],
+    ['no'=>3,  'name'=>'3 STAR',  'threshold'=> 400000,      'income'=>  20000],
+    ['no'=>4,  'name'=>'4 STAR',  'threshold'=> 800000,      'income'=>  40000],
+    ['no'=>5,  'name'=>'5 STAR',  'threshold'=>1600000,      'income'=>  80000],
+    ['no'=>6,  'name'=>'6 STAR',  'threshold'=>3200000,      'income'=> 160000],
+    ['no'=>7,  'name'=>'7 STAR',  'threshold'=>6400000,      'income'=> 320000],
+    ['no'=>8,  'name'=>'8 STAR',  'threshold'=>12800000,     'income'=> 640000],
+    ['no'=>9,  'name'=>'9 STAR',  'threshold'=>25000000,     'income'=>1250000],
+    ['no'=>10, 'name'=>'10 STAR', 'threshold'=>50000000,     'income'=>2500000],
+    ['no'=>11, 'name'=>'11 STAR', 'threshold'=>100000000,    'income'=>5000000],
+    ['no'=>12, 'name'=>'12 STAR', 'threshold'=>200000000,    'income'=>10000000],
+];
+
 
     public function show(Request $request): Response
     {

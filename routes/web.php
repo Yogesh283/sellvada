@@ -33,6 +33,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 
+Route::get('/payout', function () {
+    return Inertia::render('Wallet/Payout'); 
+})->name('payout.index');
+
+
+
 Route::middleware(['web','auth'])->group(function () {
     Route::get('/p2p/transfer', [P2PTransferController::class, 'show'])->name('p2p.transfer.page');
     Route::post('/p2p/transfer', [P2PTransferController::class, 'transfer'])->name('p2p.transfer');

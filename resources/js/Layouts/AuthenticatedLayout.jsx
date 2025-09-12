@@ -87,9 +87,17 @@ export default function AuthenticatedLayout({ header, children }) {
                   Withdraw
                 </NavLink>
 
+                {/* Payouts link using payouts.index */}
+                <NavLink href={route('payouts.index')} active={is('payouts.index') || is('payouts')} className="text-black">
+                  Payouts
+                </NavLink>
+
                 <NavLink href={route('p2p.transfer.page')} active={is('p2p.transfer.page')} className="text-black">
                   P2P Transfer
                 </NavLink>
+                
+              
+
               </div>
             </div>
 
@@ -157,6 +165,12 @@ export default function AuthenticatedLayout({ header, children }) {
                         <DesktopMenuLinkCompact href={route('wallet.withdraw')} active={is('wallet.withdraw')} onClick={() => setPanelOpen(false)}>
                           Withdrawal
                         </DesktopMenuLinkCompact>
+
+                        {/* Payouts in panel */}
+                        <DesktopMenuLinkCompact href={route('payouts.index')} active={is('payouts.index') || is('payouts')} onClick={() => setPanelOpen(false)}>
+                          Payouts
+                        </DesktopMenuLinkCompact>
+
                         <DesktopMenuLinkCompact href={route('p2p.transfer.page')} active={is('p2p.transfer.page')} onClick={() => setPanelOpen(false)}>
                           P2P Transfer
                         </DesktopMenuLinkCompact>
@@ -257,6 +271,10 @@ export default function AuthenticatedLayout({ header, children }) {
               <ResponsiveNavLink href={repurchaseHref} active={is('repurchase.index') || is('repurchase')}>Repurchase</ResponsiveNavLink>
               <ResponsiveNavLink href={route('wallet.deposit')} active={is('wallet.deposit')}>Deposit</ResponsiveNavLink>
               <ResponsiveNavLink href={route('wallet.withdraw')} active={is('wallet.withdraw')}>Withdrawal</ResponsiveNavLink>
+
+              {/* Payouts link in mobile menu */}
+              <ResponsiveNavLink href={route('payouts.index')} active={is('payouts.index') || is('payouts')}>Payouts</ResponsiveNavLink>
+
               <ResponsiveNavLink href={route('p2p.transfer.page')} active={is('p2p.transfer.page')}>P2P Transfer</ResponsiveNavLink>
             </div>
 
