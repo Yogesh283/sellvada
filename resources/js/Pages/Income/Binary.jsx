@@ -119,7 +119,7 @@ export default function Binary() {
       header={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900">Binary Business</h1>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900">Fresh Matching</h1>
             <p className="text-xs text-gray-500">
               Rank-wise left/right business, matched volume & carry forward.
             </p>
