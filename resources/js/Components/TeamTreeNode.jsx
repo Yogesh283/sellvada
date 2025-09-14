@@ -2,21 +2,63 @@ import React, { useState } from "react";
 import { Link, usePage } from "@inertiajs/react";
 
 const THEMES = {
-  diamond: { frame: "bg-emerald-500 border-emerald-600 text-white", badge: "bg-emerald-600 text-white", icon: "bg-emerald-400 text-white", stroke: "#34d399" },
-  gold:    { frame: "bg-amber-400 border-amber-500 text-white",     badge: "bg-amber-500 text-white",   icon: "bg-amber-300 text-white",   stroke: "#fbbf24" },
-  silver:  { frame: "bg-gray-400 border-gray-500 text-white",        badge: "bg-gray-500 text-white",    icon: "bg-gray-300 text-white",    stroke: "#94a3b8" },
-  default: { frame: "bg-white border-gray-300 text-gray-700",        badge: "bg-gray-100 text-gray-600", icon: "bg-gray-200 text-gray-600", stroke: "#d1d5db" },
+  diamond: {
+    frame: "bg-emerald-500 border-emerald-600 text-white",
+    badge: "bg-emerald-600 text-white",
+    icon: "bg-emerald-400 text-white",
+    stroke: "#34d399",
+  },
+  gold: {
+    frame: "bg-amber-400 border-amber-500 text-white",
+    badge: "bg-amber-500 text-white",
+    icon: "bg-amber-300 text-white",
+    stroke: "#fbbf24",
+  },
+  silver: {
+    frame: "bg-gray-400 border-gray-500 text-white",
+    badge: "bg-gray-500 text-white",
+    icon: "bg-gray-300 text-white",
+    stroke: "#94a3b8",
+  },
+  starter: {
+    frame: "bg-red-500 border-red-600 text-white",
+    badge: "bg-red-600 text-white",
+    icon: "bg-red-400 text-white",
+    stroke: "#ef4444",
+  },
+  default: {
+    frame: "bg-white border-gray-300 text-gray-700",
+    badge: "bg-gray-100 text-gray-600",
+    icon: "bg-gray-200 text-gray-600",
+    stroke: "#d1d5db",
+  },
 };
 
 const VConn = ({ color = "#d1d5db", h = 16 }) => (
   <svg width="8" height={h} className="block">
-    <line x1="4" y1="0" x2="4" y2={h} stroke={color} strokeWidth="3" strokeLinecap="round" />
+    <line
+      x1="4"
+      y1="0"
+      x2="4"
+      y2={h}
+      stroke={color}
+      strokeWidth="3"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
 const HConn = ({ color = "#d1d5db", w = 60 }) => (
   <svg width={w} height="8" className="block">
-    <line x1="0" y1="4" x2={w} y2="4" stroke={color} strokeWidth="3" strokeLinecap="round" />
+    <line
+      x1="0"
+      y1="4"
+      x2={w}
+      y2="4"
+      stroke={color}
+      strokeWidth="3"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
@@ -30,11 +72,19 @@ function Box({ title, id, pkg, open, onToggle, href, isRoot }) {
         className={`mx-auto rounded-xl sm:rounded-2xl border ${t.frame} shadow-md w-[100px] sm:w-[112px] h-[56px] sm:h-[64px] flex items-center justify-center transition active:scale-[0.99] ring-1`}
         title={open ? "Collapse" : "Expand"}
       >
-        {!isRoot && <div className="absolute left-1 top-1 text-[10px] text-white/80">{open ? "▾" : "▸"}</div>}
-        <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center ${t.icon}`}>
+        {!isRoot && (
+          <div className="absolute left-1 top-1 text-[10px] text-white/80">
+            {open ? "▾" : "▸"}
+          </div>
+        )}
+        <div
+          className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center ${t.icon}`}
+        >
           <span className="text-xs sm:text-sm">👤</span>
         </div>
-        <div className={`absolute top-1 right-1 text-[8px] px-1.5 rounded-full capitalize truncate max-w-[70px] ${t.badge}`}>
+        <div
+          className={`absolute top-1 right-1 text-[8px] px-1.5 rounded-full capitalize truncate max-w-[70px] ${t.badge}`}
+        >
           {pkg ?? "No-Pack"}
         </div>
       </button>
@@ -45,7 +95,12 @@ function Box({ title, id, pkg, open, onToggle, href, isRoot }) {
       </div>
 
       {href && (
-        <Link href={href} className="absolute -right-1 -bottom-1 text-[9px] bg-white/70 px-1 rounded hover:bg-white">↗</Link>
+        <Link
+          href={href}
+          className="absolute -right-1 -bottom-1 text-[9px] bg-white/70 px-1 rounded hover:bg-white"
+        >
+          ↗
+        </Link>
       )}
     </div>
   );
@@ -59,16 +114,20 @@ export default function TeamTreeNode({ node, isRoot = false }) {
   if (!node) return null;
 
   const title = node.name || node.code || `#${node.id}`;
-  const hrefFor = id => {
-    try { return route("team.tree", { root: id, type }); }
-    catch { return `/team/tree/${id}?type=${type}`; }
+  const hrefFor = (id) => {
+    try {
+      return route("team.tree", { root: id, type });
+    } catch {
+      return `/team/tree/${id}?type=${type}`;
+    }
   };
 
   const showChildren = open && (node.children?.L || node.children?.R);
   const theme = THEMES[node.package] || THEMES.default;
 
-  // Root is block + mx-auto; children inline-flex.
-  const wrapperCls = isRoot ? "flex flex-col items-center mx-auto" : "inline-flex flex-col items-center";
+  const wrapperCls = isRoot
+    ? "flex flex-col items-center mx-auto"
+    : "inline-flex flex-col items-center";
 
   return (
     <div className={wrapperCls}>
@@ -77,7 +136,7 @@ export default function TeamTreeNode({ node, isRoot = false }) {
         id={node.id}
         pkg={node.package}
         open={open}
-        onToggle={() => setOpen(v => !v)}
+        onToggle={() => setOpen((v) => !v)}
         href={hrefFor(node.id)}
         isRoot={isRoot}
       />

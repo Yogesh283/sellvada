@@ -31,7 +31,8 @@ class BinarySummaryController extends Controller
         $leftCount = 0;
         $rightCount = 0;
         $ids = [];
-        $pkgCounts = ['silver'=>0,'gold'=>0,'diamond'=>0,'other'=>0];
+        // ADDED 'starter' here
+        $pkgCounts = ['silver'=>0,'gold'=>0,'diamond'=>0,'starter'=>0,'other'=>0];
 
         // Build team CTE + bindings (placement/referral)
         if (strtolower($type) === 'referral') {
@@ -39,7 +40,8 @@ class BinarySummaryController extends Controller
             if (!$rootReferral) {
                 return [
                     'totals' => ['left' => 0.0, 'right' => 0.0],
-                    'matrix' => ['silver'=>[], 'gold'=>[], 'diamond'=>[], 'other'=>[]],
+                    // ADDED 'starter' key in matrix defaults below
+                    'matrix' => ['silver'=>[], 'gold'=>[], 'diamond'=>[], 'starter'=>[], 'other'=>[]],
                     'recent' => [],
                     'carryTotals' => ['left'=>0.0,'right'=>0.0,'total'=>0.0],
                     'counts' => ['total'=>0,'left'=>0,'right'=>0],
@@ -105,7 +107,8 @@ GROUP BY x.type, x.root_leg
         $rows = DB::select($rowsSql, $bindRows);
 
         $emptyRow = ['left'=>0.0,'right'=>0.0,'orders_left'=>0,'orders_right'=>0,'matched'=>0.0,'pairs'=>0,'cf_left'=>0.0,'cf_right'=>0.0];
-        $matrix = ['silver'=>$emptyRow,'gold'=>$emptyRow,'diamond'=>$emptyRow,'other'=>$emptyRow];
+        // ADDED 'starter' to matrix defaults
+        $matrix = ['silver'=>$emptyRow,'gold'=>$emptyRow,'diamond'=>$emptyRow,'starter'=>$emptyRow,'other'=>$emptyRow];
 
         foreach ($rows as $r) {
             $rk = strtolower((string)($r->type ?? 'other'));
@@ -195,13 +198,15 @@ SELECT COUNT(*) AS cnt FROM sub
         }
 
         // --- package counts among ids (highest paid type per user) ---
-        $pkgCounts = ['silver'=>0,'gold'=>0,'diamond'=>0,'other'=>0];
+        $pkgCounts = ['silver'=>0,'gold'=>0,'diamond'=>0,'starter'=>0,'other'=>0];
         if (!empty($ids)) {
+            // include 'starter' in the list so it's considered in type-based grouping
             $order = "CASE LOWER(type) WHEN 'silver' THEN 1 WHEN 'gold' THEN 2 WHEN 'diamond' THEN 3 ELSE 0 END";
             $lvlById = DB::table('sell')
                 ->select('buyer_id', DB::raw("MAX($order) AS lvl"))
                 ->where('status','paid')
-                ->whereIn(DB::raw('LOWER(type)'), ['silver','gold','diamond'])
+                // NOTE: whereIn(LOWER(type)) call below - include starter if you want it considered as a paid type
+                ->whereIn(DB::raw('LOWER(type)'), ['silver','gold','diamond','starter'])
                 ->whereIn('buyer_id', $ids)
                 ->groupBy('buyer_id')
                 ->pluck('lvl','buyer_id');
@@ -215,7 +220,8 @@ SELECT COUNT(*) AS cnt FROM sub
         }
 
         // --- matched/pairs/carry for matrix rows ---
-        $unit = ['silver'=>3000.0, 'gold'=>15000.0, 'diamond'=>30000.0];
+        // ADDED 'starter' unit (0.0 chosen to force fallback to orders-based pairing)
+        $unit = ['silver'=>3000.0, 'gold'=>15000.0, 'diamond'=>30000.0, 'starter'=>1500.0];
         $cfLTotal = 0.0; $cfRTotal = 0.0;
         foreach ($matrix as $rank => &$row) {
             $leftAmt  = (float)($row['left']  ?? 0);

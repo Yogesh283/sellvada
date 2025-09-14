@@ -10,10 +10,11 @@ const fmtAmt = (n) =>
     maximumFractionDigits: 2,
   });
 
-// ✅ Table से "other" हटाया हुआ रहेगा
-const RANKS = ["silver", "gold", "diamond"];
+// RANKS now includes 'starter' as requested
+const RANKS = ["starter", "silver", "gold", "diamond"];
 
 const rankTone = {
+  starter: "bg-red-100 text-red-800 ring-red-200",
   silver: "bg-gray-100 text-gray-700 ring-gray-200",
   gold: "bg-amber-100 text-amber-800 ring-amber-200",
   diamond: "bg-emerald-100 text-emerald-800 ring-emerald-200",
@@ -85,7 +86,8 @@ function AmountPill({ value, side }) {
 }
 
 export default function Binary() {
-  const { asOf, filters, totals, matrix, recent } = usePage().props;
+  // props from controller
+  const { asOf, filters, totals = {}, matrix = {}, recent = [] } = usePage().props;
 
   const [from, setFrom] = React.useState(filters?.from || "");
   const [to, setTo] = React.useState(filters?.to || "");
@@ -98,7 +100,7 @@ export default function Binary() {
     return qs ? `/income/binary?${qs}` : `/income/binary`;
   };
 
-  // grand totals for footer (table)
+  // grand totals calculated from matrix as fallback (keeps previous behavior)
   const grand = RANKS.reduce(
     (g, r) => {
       const row = matrix?.[r] || {};
@@ -113,6 +115,10 @@ export default function Binary() {
     },
     { oL: 0, oR: 0, aL: 0, aR: 0, m: 0, cfL: 0, cfR: 0 }
   );
+
+  // Prefer controller-provided totals (authoritative left/right team business)
+  const leftBusiness = totals?.left ?? grand.aL;
+  const rightBusiness = totals?.right ?? grand.aR;
 
   return (
     <AuthenticatedLayout
@@ -169,11 +175,11 @@ export default function Binary() {
 
         {/* KPI cards with colors */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <StatCard label="Left Business" value={grand.aL} tone="left" />
-          <StatCard label="Right Business" value={grand.aR} tone="right" />
+          <StatCard label="Left Business" value={leftBusiness} tone="left" />
+          <StatCard label="Right Business" value={rightBusiness} tone="right" />
         </div>
 
-        {/* Rank-wise table (without "other") */}
+        {/* Rank-wise table */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b px-5 py-4">
             <h2 className="font-semibold text-gray-900">Binary-wise Summary</h2>
@@ -225,7 +231,6 @@ export default function Binary() {
                       </td>
 
                       <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(row.matched)}</td>
-                     
                     </tr>
                   );
                 })}
@@ -251,8 +256,6 @@ export default function Binary() {
                     </div>
                   </td>
                   <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(grand.m)}</td>
-                  {/* <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(grand.cfL)}</td>
-                  <td className="px-5 py-3 font-semibold tabular-nums">₹{fmtAmt(grand.cfR)}</td> */}
                 </tr>
               </tfoot>
             </table>
@@ -315,7 +318,6 @@ export default function Binary() {
             </table>
           </div>
         </div>
-
       </div>
     </AuthenticatedLayout>
   );

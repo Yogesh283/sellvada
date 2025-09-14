@@ -8,7 +8,7 @@ class BuyController extends Controller
 {
     public function index()
     {
-        // Minimal catalog (aap DB table se laa sakte ho; yahan static)
+        // Minimal catalog (you can load from DB if you prefer; this is static for now)
         $catalog = [
             [
                 'id'      => 1,
@@ -42,12 +42,21 @@ class BuyController extends Controller
                 'img'     => '/image/2.png',
                 'type'    => 'repurchase',
             ],
+            // NEW: Starter plan (red colour in UI as requested)
+            [
+                'id'      => 5,
+                'name'    => 'Starter Pack',
+                'price'   => 1500,               // price you asked for
+                'variant' => 'Starter Bundle',
+                'img'     => '/image/starter.png', // change to your starter image path
+                'type'    => 'starter',
+            ],
         ];
 
         return Inertia::render('Shop/Buy', [
             'catalog' => $catalog,
             'defaults' => [
-                'shipping' => 49,   // UI default; server-side final calc aapka controller karega
+                'shipping' => 49,   // UI default; server-side final calc is up to you
             ],
         ]);
     }

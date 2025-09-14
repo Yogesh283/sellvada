@@ -322,12 +322,13 @@ WITH RECURSIVE team AS (
         if ($request->query('from')) { $dateSql .= " AND DATE(s.created_at) >= ?"; $binds[] = $request->query('from'); }
         if ($request->query('to'))   { $dateSql .= " AND DATE(s.created_at) <= ?"; $binds[] = $request->query('to'); }
 
+        // NOTE: added 'starter' to the list so starter sales count toward placement totals
         $sql = $placementCte . "
 SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, SUM(s.amount) as amt
 FROM team t
 JOIN sell s ON s.buyer_id = t.id
 WHERE s.status='paid'
-  AND LOWER(s.type) IN ('silver','gold','diamond','repurchase')
+  AND LOWER(s.type) IN ('starter','silver','gold','diamond','repurchase')
   {$dateSql}
 GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
 ";
@@ -339,6 +340,49 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             elseif ($r->leg === 'R') $R2 = (float)$r->amt;
         }
         $matched = min($L2, $R2);
+
+        // ------------------ NEW: package-wise team business totals (subquery approach to avoid ONLY_FULL_GROUP_BY) ------------------
+        $packageTotals = ['starter'=>0.0,'silver'=>0.0,'gold'=>0.0,'diamond'=>0.0,'other'=>0.0];
+
+        // bucket CASE expression (we will use it inside a subquery and GROUP BY the alias)
+        $caseSql = "CASE WHEN LOWER(NULLIF(s.type,'')) IN ('starter','silver','gold','diamond') THEN LOWER(s.type) ELSE 'other' END";
+
+        if ($hasReferral) {
+            // Use subquery to compute buckets then aggregate — avoids ONLY_FULL_GROUP_BY issues and is portable
+            $pkgRowsSql = $teamCte . "
+SELECT ttype, COALESCE(SUM(amt),0) AS amt FROM (
+  SELECT {$caseSql} AS ttype, s.amount AS amt
+  FROM team t
+  JOIN sell s ON s.buyer_id = t.id
+  WHERE s.status = 'paid'
+) x
+GROUP BY ttype
+";
+            $pkgRows = DB::select($pkgRowsSql, [$myReferralId]);
+
+            foreach ($pkgRows as $pr) {
+                $k = strtolower((string)$pr->ttype ?: 'other');
+                if (!isset($packageTotals[$k])) $packageTotals[$k] = 0.0;
+                $packageTotals[$k] = (float)$pr->amt;
+            }
+        } else {
+            $pkgRowsSql = "
+SELECT ttype, COALESCE(SUM(amt),0) AS amt FROM (
+  SELECT {$caseSql} AS ttype, s.amount AS amt
+  FROM sell s
+  WHERE s.sponsor_id = ?
+    AND s.status = 'paid'
+) x
+GROUP BY ttype
+";
+            $pkgRows = DB::select($pkgRowsSql, [$user->id]);
+
+            foreach ($pkgRows as $pr) {
+                $k = strtolower((string)$pr->ttype ?: 'other');
+                if (!isset($packageTotals[$k])) $packageTotals[$k] = 0.0;
+                $packageTotals[$k] = (float)$pr->amt;
+            }
+        }
 
         // compute slabs progress using $this->slabs
         $rows = array_map(function ($s) use ($matched) {
@@ -376,6 +420,7 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
         $userSafe = Arr::except($raw, ['password','remember_token','Password_plain']);
 
         $plan = DB::table('sell')->where('buyer_id', $user->id)->where('status', 'paid')->orderByDesc('id')->value('type');
+        $firstsell = DB::table('sell')->where('buyer_id', $user->id )->where('status', 'paid')->orderBy('created_at', 'asc')->first();
 
         // Final props
         $props = [
@@ -387,6 +432,7 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             'today_profit'     => $PayoutAmountToday,
             'total_team'       => $totalTeam,
             'current_plan'     => $plan,
+            'fristsell'        => $firstsell,
             'left'             => $L2,
             'right'            => $R2,
             'matched'          => $matched,
@@ -412,6 +458,8 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             'current'          => $current,
             'asOf'             => now()->toDateTimeString(),
             'filters'          => ['from' => $request->query('from'), 'to' => $request->query('to')],
+            // package-wise team business totals
+            'packageTotals'    => $packageTotals,
         ];
 
         // Return single Inertia response for dashboard

@@ -10,24 +10,30 @@ use Inertia\Response;
 
 class StarIncomeController extends Controller
 {
-    private array $includeTypes = ['silver','gold','diamond','repurchase'];
+    /**
+     * Types to include when computing team business totals.
+     * Added 'starter' so starter purchases count toward team business.
+     */
+    private array $includeTypes = ['starter','silver','gold','diamond','repurchase'];
 
-   private array $slabs = [
-    ['no'=>1,  'name'=>'1 STAR',  'threshold'=> 100000,      'income'=>   5000],
-    ['no'=>2,  'name'=>'2 STAR',  'threshold'=> 200000,      'income'=>  10000],
-    ['no'=>3,  'name'=>'3 STAR',  'threshold'=> 400000,      'income'=>  20000],
-    ['no'=>4,  'name'=>'4 STAR',  'threshold'=> 800000,      'income'=>  40000],
-    ['no'=>5,  'name'=>'5 STAR',  'threshold'=>1600000,      'income'=>  80000],
-    ['no'=>6,  'name'=>'6 STAR',  'threshold'=>3200000,      'income'=> 160000],
-    ['no'=>7,  'name'=>'7 STAR',  'threshold'=>6400000,      'income'=> 320000],
-    ['no'=>8,  'name'=>'8 STAR',  'threshold'=>12800000,     'income'=> 640000],
-    ['no'=>9,  'name'=>'9 STAR',  'threshold'=>25000000,     'income'=>1250000],
-    ['no'=>10, 'name'=>'10 STAR', 'threshold'=>50000000,     'income'=>2500000],
-    ['no'=>11, 'name'=>'11 STAR', 'threshold'=>100000000,    'income'=>5000000],
-    ['no'=>12, 'name'=>'12 STAR', 'threshold'=>200000000,    'income'=>10000000],
-];
+    private array $slabs = [
+        ['no'=>1,  'name'=>'1 STAR',  'threshold'=> 100000,      'income'=>   5000],
+        ['no'=>2,  'name'=>'2 STAR',  'threshold'=> 200000,      'income'=>  10000],
+        ['no'=>3,  'name'=>'3 STAR',  'threshold'=> 400000,      'income'=>  20000],
+        ['no'=>4,  'name'=>'4 STAR',  'threshold'=> 800000,      'income'=>  40000],
+        ['no'=>5,  'name'=>'5 STAR',  'threshold'=>1600000,      'income'=>  80000],
+        ['no'=>6,  'name'=>'6 STAR',  'threshold'=>3200000,      'income'=> 160000],
+        ['no'=>7,  'name'=>'7 STAR',  'threshold'=>6400000,      'income'=> 320000],
+        ['no'=>8,  'name'=>'8 STAR',  'threshold'=>12800000,     'income'=> 640000],
+        ['no'=>9,  'name'=>'9 STAR',  'threshold'=>25000000,     'income'=>1250000],
+        ['no'=>10, 'name'=>'10 STAR', 'threshold'=>50000000,     'income'=>2500000],
+        ['no'=>11, 'name'=>'11 STAR', 'threshold'=>100000000,    'income'=>5000000],
+        ['no'=>12, 'name'=>'12 STAR', 'threshold'=>200000000,    'income'=>10000000],
+    ];
 
-
+    /**
+     * Show star income page (Income/Star)
+     */
     public function show(Request $request): Response
     {
         $uid = (int) Auth::id();
@@ -62,13 +68,15 @@ WITH RECURSIVE team AS (
         if ($from) { $dateSql .= " AND DATE(s.created_at) >= ?"; $binds[] = $from; }
         if ($to)   { $dateSql .= " AND DATE(s.created_at) <= ?"; $binds[] = $to; }
 
-        // Get Left / Right total business of full team
+        // Build the IN-list from $includeTypes for clarity and safety
+        $inList = implode("','", array_map('strtolower', $this->includeTypes)); // 'starter','silver',...
+        // Get Left / Right total business of full team (includes starter now)
         $sql = $teamCte . "
 SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, SUM(s.amount) as amt
 FROM team t
 JOIN sell s ON s.buyer_id = t.id
 WHERE s.status='paid'
-  AND LOWER(s.type) IN ('silver','gold','diamond','repurchase')
+  AND LOWER(s.type) IN ('{$inList}')
   {$dateSql}
 GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
 ";
@@ -103,12 +111,12 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             'rows'     => $rows,
             'current'  => $current,
         ]);
-
     }
 
-
-
-public function showw(Request $request): Response
+    /**
+     * Alternative view that renders Dashboard component — same logic as above.
+     */
+    public function showw(Request $request): Response
     {
         $uid = (int) Auth::id();
         abort_unless($uid, 401);
@@ -142,13 +150,14 @@ WITH RECURSIVE team AS (
         if ($from) { $dateSql .= " AND DATE(s.created_at) >= ?"; $binds[] = $from; }
         if ($to)   { $dateSql .= " AND DATE(s.created_at) <= ?"; $binds[] = $to; }
 
-        // Get Left / Right total business of full team
+        $inList = implode("','", array_map('strtolower', $this->includeTypes));
+
         $sql = $teamCte . "
 SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, SUM(s.amount) as amt
 FROM team t
 JOIN sell s ON s.buyer_id = t.id
 WHERE s.status='paid'
-  AND LOWER(s.type) IN ('silver','gold','diamond','repurchase')
+  AND LOWER(s.type) IN ('{$inList}')
   {$dateSql}
 GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
 ";
@@ -183,7 +192,5 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             'rows'     => $rows,
             'current'  => $current,
         ]);
-
     }
-
 }

@@ -15,16 +15,32 @@ class RunBinaryMatching extends Command
     protected $description = 'Compute package-based single-pair binary payout (self-qualification, window consumption, wallet credit)';
 
     // ----- levels (lowercase) -----
-    private array $order = ['silver' => 1, 'gold' => 2, 'diamond' => 3];
+    // ADDED 'starter' as level 0
+    private array $order = ['starter' => 0, 'silver' => 1, 'gold' => 2, 'diamond' => 3];
 
     // ----- PAIR AMOUNTS (as per your rule) -----
-    // Silver-Silver = 3,000 | Gold-Gold = 15,000 | Diamond-Diamond = 30,000
-    private array $planAmount = ['silver' => 3000.00, 'gold' => 15000.00, 'diamond' => 30000.00];
+    // Starter = 1,500 | Silver = 3,000 | Gold = 15,000 | Diamond = 30,000
+    private array $planAmount = [
+        'starter' => 1500.00, // <-- ADDED
+        'silver'  => 3000.00,
+        'gold'    => 15000.00,
+        'diamond' => 30000.00,
+    ];
 
     // ----- CAPS -----
-    // Silver: 3k / 6k | Gold: 15k / 30k | Diamond: 48k / 96k
-    private array $capPerClose = ['silver'=>3000.00, 'gold'=>15000.00, 'diamond'=>48000.00];
-    private array $capPerDay   = ['silver'=>6000.00,  'gold'=>30000.00, 'diamond'=>96000.00];
+    // Set reasonable caps for starter (mirroring silver but smaller). Adjust if you want different caps.
+    private array $capPerClose = [
+        'starter' => 1500.00, // <-- ADDED
+        'silver'  => 3000.00,
+        'gold'    => 15000.00,
+        'diamond' => 48000.00
+    ];
+    private array $capPerDay = [
+        'starter' => 3000.00, // <-- ADDED
+        'silver'  => 6000.00,
+        'gold'    => 30000.00,
+        'diamond' => 96000.00
+    ];
 
     public function handle(): int
     {
@@ -57,8 +73,9 @@ class RunBinaryMatching extends Command
         $this->info("Unconsumed paid rows in final window: ".$this->countRowsInWindow($start, $end));
 
         // sponsors with unconsumed rows in this window
+        // INCLUDE 'starter' here
         $sponsorIds = DB::table($this->sellTable)
-            ->whereIn(DB::raw('LOWER(type)'), ['silver','gold','diamond'])
+            ->whereIn(DB::raw('LOWER(type)'), ['starter','silver','gold','diamond'])
             ->where('status', 'paid')
             ->whereNull('pay_out_status')
             ->whereBetween('created_at', [$start, $end])
@@ -75,7 +92,7 @@ class RunBinaryMatching extends Command
 
             // (1) self-qualification (lifetime till window-end)
             $selfLvl  = $this->getSelfLevel($sid, $end);
-            $selfPlan = $this->lvlToPlan($selfLvl);   // silver | gold | diamond | null
+            $selfPlan = $this->lvlToPlan($selfLvl);   // starter | silver | gold | diamond | null
             if (!$selfPlan) {
                 $this->recordNoPay($sid, 'none', $start, $closing);
                 $this->line("NO SELF → SPONSOR={$sid}");
@@ -87,6 +104,7 @@ class RunBinaryMatching extends Command
                 ->selectRaw("
                     UPPER(leg) as leg,
                     MAX(CASE LOWER(type)
+                         WHEN 'starter' THEN 0
                          WHEN 'silver' THEN 1
                          WHEN 'gold' THEN 2
                          WHEN 'diamond' THEN 3
@@ -95,7 +113,7 @@ class RunBinaryMatching extends Command
                 ->where('sponsor_id', $sid)
                 ->where('status', 'paid')
                 ->whereNull('pay_out_status')
-                ->whereIn(DB::raw('LOWER(type)'), ['silver','gold','diamond'])
+                ->whereIn(DB::raw('LOWER(type)'), ['starter','silver','gold','diamond'])
                 ->whereBetween('created_at', [$start, $end])
                 ->whereIn(DB::raw('UPPER(leg)'), ['L','R'])
                 ->groupBy(DB::raw('UPPER(leg)'))
@@ -115,7 +133,18 @@ class RunBinaryMatching extends Command
             // (3) business rules → decide payable
             $payable = 0.0; $reason = '';
 
-            if ($selfPlan === 'silver') {
+            if ($selfPlan === 'starter') {
+                // STARTER: only S T A R T E R / S T A R T E R allowed -> ₹1,500
+                if ($leftLvl === 0 && $rightLvl === 0) {
+                    $payable = $this->planAmount['starter'];
+                    $reason  = 'starter_pair';
+                } else {
+                    $this->recordNoPay($sid, $selfPlan, $start, $closing);
+                    $this->line("NOT ALLOWED (STARTER needs S/S) → SPONSOR={$sid} L=".strtoupper((string)$leftPlan)." R=".strtoupper((string)$rightPlan));
+                    continue;
+                }
+
+            } elseif ($selfPlan === 'silver') {
                 // only S/S allowed → ₹3,000
                 if ($leftLvl === 1 && $rightLvl === 1) {
                     $payable = $this->planAmount['silver'];
@@ -311,7 +340,7 @@ class RunBinaryMatching extends Command
     {
         $types = DB::table($this->sellTable)
             ->where('buyer_id', $sponsorId)
-            ->whereIn(DB::raw('LOWER(type)'), ['silver','gold','diamond'])
+            ->whereIn(DB::raw('LOWER(type)'), ['starter','silver','gold','diamond']) // <-- include starter
             ->where('status', 'paid')
             ->where('created_at', '<=', $asOf)
             ->pluck('type')
@@ -336,6 +365,11 @@ class RunBinaryMatching extends Command
 
     private function lvlToPlan(int $lvl): ?string
     {
-        return $lvl >= 3 ? 'diamond' : ($lvl === 2 ? 'gold' : ($lvl === 1 ? 'silver' : null));
+        // UPDATED: map 0 => 'starter', 1 => 'silver', 2 => 'gold', 3+ => 'diamond'
+        if ($lvl >= 3) return 'diamond';
+        if ($lvl === 2) return 'gold';
+        if ($lvl === 1) return 'silver';
+        if ($lvl === 0) return 'starter';
+        return null;
     }
 }

@@ -7,8 +7,28 @@ import { Autoplay } from "swiper/modules";
 import "swiper/css";
 
 const CATALOG = {
-  superfruit: {
+
+  new: {
     id: 1,
+    name: "Super Food",
+    img: "/image/1.png",
+    variant: "30 Pic gummies(1 bottles)",
+    type: "starter",
+    bottles: 1,
+    gummiesPerBottle: 30,
+    unitPrice: 2000,
+    baseTotal: 1 * 2000, // 4000
+    mrp: 2000,
+    price: 1500,
+    discount: 1500 - 2000, // 1000
+    discountPercent: 25,
+    totalGummies: 1 * 30, // 60
+    pricePerGummy: 2000 / 60, // 50
+  },
+
+
+  superfruit: {
+    id: 2,
     name: "Super Food (Silver)",
     img: "/image/2.png",
     variant: "30 Pic gummies(2 bottles)",
@@ -26,7 +46,7 @@ const CATALOG = {
   },
 
   immunity: {
-    id: 2,
+    id: 3,
     name: "Super Food (Gold)",
     img: "/image/10.png",
     variant: "30 Pic gummies(10 bottles)",
@@ -44,7 +64,7 @@ const CATALOG = {
   },
 
   metabolism: {
-    id: 3,
+    id: 4,
     name: "Super Food(Diamond)",
     img: "/image/20.png",
     variant: "30 Pic gummies(20 bottles)",
@@ -348,10 +368,17 @@ export default function Welcome() {
         <Section className="mt-10 sm:mt-14" id="products">
           <SectionTitle eyebrow="Top Picks" title="Featured Products" desc="Hand-picked favorites our customers love." />
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+
+            <ProductCard
+              product={CATALOG.new}
+              bullets={["Acai Berry", "Green Apple", "Blueberry"]}
+            />
+
             <ProductCard
               product={CATALOG.superfruit}
               bullets={["Detox & Freshness", "Cell Repair", "Skin Health"]}
             />
+
             <ProductCard
               product={CATALOG.immunity}
               bullets={["Grape Seed", "Cranberry", "Noni Energy"]}
@@ -360,6 +387,7 @@ export default function Welcome() {
               product={CATALOG.metabolism}
               bullets={["Acai Berry", "Green Apple", "Blueberry"]}
             />
+
           </div>
         </Section>
 

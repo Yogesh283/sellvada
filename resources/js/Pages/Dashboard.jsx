@@ -1,3 +1,4 @@
+// resources/js/Pages/Dashboard.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, usePage } from "@inertiajs/react";
@@ -106,11 +107,10 @@ function CopyField({ label = null, value = "" }) {
       <button
         onClick={copy}
         type="button"
-        className={`rounded px-2 sm:px-3 py-1.5 text-sm font-semibold transition ${
-          copied
-            ? "bg-green-600 text-white hover:bg-green-700"
-            : "bg-emerald-600 text-white hover:bg-emerald-700"
-        }`}
+        className={`rounded px-2 sm:px-3 py-1.5 text-sm font-semibold transition ${copied
+          ? "bg-green-600 text-white hover:bg-green-700"
+          : "bg-emerald-600 text-white hover:bg-emerald-700"
+          }`}
       >
         {copied ? "Copied!" : "Copy"}
       </button>
@@ -133,8 +133,19 @@ function humanCountdown(seconds) {
   return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
 }
 
-function RewardPlan({ plans = [], joinedAt = null, businessSummary = {} }) {
-    const { matched } = usePage().props;
+/**
+ * RewardPlan
+ * - plans: array of plan objects
+ * - businessSummary: { left, right, matched? }
+ * - fristsell: optional object { created_at: string } provided by controller props
+ *
+ * Timer behaviour:
+ * - Timer ONLY starts from fristsell.created_at when fristsell exists.
+ * - If no fristsell, timer shows 00:00:00 and explanatory message.
+ */
+function RewardPlan({ plans = [], businessSummary = {}, fristsell = null }) {
+  // matched is read from global props (keeps previous behavior)
+  const { matched } = usePage().props;
 
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -142,13 +153,17 @@ function RewardPlan({ plans = [], joinedAt = null, businessSummary = {} }) {
     return () => clearInterval(id);
   }, []);
 
-  const startDate = joinedAt ? new Date(joinedAt) : null;
+  // Use first-sell created_at only (from server-provided fristsell). If null => no timer.
+  const startRaw = fristsell?.created_at ?? null;
+  const startDate = startRaw ? new Date(startRaw) : null;
+
   const totalBusiness = Number(businessSummary.left || 0) + Number(businessSummary.right || 0);
   const maxThreshold = plans.reduce((mx, p) => Math.max(mx, p.volumeNumber ?? 0), 0);
 
   const planStatuses = plans.map((p) => {
     if (!startDate) {
-      return { ...p, status: "not_started", remainingSecs: null, endDate: null };
+      // no first sell yet — show no_sell status and remainingSecs = 0
+      return { ...p, status: "no_sell", remainingSecs: 0, endDate: null };
     }
     const endDate = new Date(startDate.getTime() + (p.daysNumber || 0) * 24 * 3600 * 1000);
     const secs = secondsBetween(new Date().toISOString(), endDate);
@@ -168,42 +183,65 @@ function RewardPlan({ plans = [], joinedAt = null, businessSummary = {} }) {
         Cell Veda — Business Growth Rewards
       </div>
       <div className="p-4">
-        {earliestActive ? (
+        {startDate ? (
+          // first sell exists: show countdown or expired message
+          earliestActive ? (
+            <div className="mb-6 flex flex-col items-center justify-center gap-2 text-center">
+              <div className="text-slate-600 text-xs sm:text-sm">This countdown is running from the date of your first purchase (First Sell)</div>
+              <div className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tabular-nums text-green-600 break-words">
+                {humanCountdown(bigCountdownSecs)}
+              </div>
+              <div className="text-xs sm:text-sm text-slate-500">
+                Expires: {formatDT(earliestActive.endDate)}
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6 flex flex-col items-center justify-center gap-2 text-center">
+              <div className="text-slate-600 text-xs sm:text-sm">This countdown is running from the date of your first purchase (First Sell)</div>
+              <div className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tabular-nums text-gray-600 break-words">
+                {humanCountdown(0)}
+              </div>
+              <div className="text-xs sm:text-sm text-slate-500">
+                No active reward window
+              </div>
+            </div>
+          )
+        ) : (
+          // no first sell yet -> show 00:00:00 and info
           <div className="mb-6 flex flex-col items-center justify-center gap-2 text-center">
-            <div className="text-slate-600 text-xs sm:text-sm">Your reward window is active until</div>
-            <div className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tabular-nums text-green-600 break-words">
-              {humanCountdown(bigCountdownSecs)}
+            <div className="text-slate-600 text-xs sm:text-sm">
+              This timer will start when you make your first purchase — no first purchase found yet.            </div>
+            <div className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tabular-nums text-gray-500 break-words">
+              {humanCountdown(0)}
             </div>
-            <div className="text-xs sm:text-sm text-slate-500">
-              Expires: {formatDT(earliestActive.endDate)}
-            </div>
+            <div className="text-xs sm:text-sm text-slate-500">No First Sell found — Timer 00:00:00</div>
           </div>
-        ) : null}
+        )}
 
         {/* Team business green progress line */}
-      <div className="mb-6">
-  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
-    <div className="text-sm font-medium text-slate-700">Team Business</div>
-    <div className="text-sm font-medium text-slate-600">{formatINR(matched)}</div>
-  </div>
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
+            <div className="text-sm font-medium text-slate-700">Team Business</div>
+            <div className="text-sm font-medium text-slate-600">{formatINR(matched)}</div>
+          </div>
 
-  <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
-    <div
-      className="h-3 rounded-full transition-all duration-500"
-      style={{
-        width: `${maxThreshold > 0 ? Math.min(100, Math.round((totalBusiness / maxThreshold) * 100)) : 0}%`,
-        background:
-          totalBusiness === matched
-            ? "linear-gradient(90deg,#2563eb,#3b82f6)" // blue if equal
-            : "linear-gradient(90deg,#059669,#10b981)", // green otherwise
-      }}
-    />
-  </div>
+          <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+            <div
+              className="h-3 rounded-full transition-all duration-500"
+              style={{
+                width: `${maxThreshold > 0 ? Math.min(100, Math.round((totalBusiness / maxThreshold) * 100)) : 0}%`,
+                background:
+                  totalBusiness === matched
+                    ? "linear-gradient(90deg,#2563eb,#3b82f6)" // blue if equal
+                    : "linear-gradient(90deg,#059669,#10b981)", // green otherwise
+              }}
+            />
+          </div>
 
-  <div className="text-xs text-slate-400 mt-1">
-    Progress towards highest plan ({maxThreshold ? formatINR(maxThreshold) : "-"})
-  </div>
-</div>
+          <div className="text-xs text-slate-400 mt-1">
+            Progress towards highest plan ({maxThreshold ? formatINR(maxThreshold) : "-"})
+          </div>
+        </div>
 
         {/* Responsive table */}
         <div className="overflow-x-auto">
@@ -226,6 +264,9 @@ function RewardPlan({ plans = [], joinedAt = null, businessSummary = {} }) {
                 } else if (ps.status === "expired") {
                   remainDisplay = "Expired";
                   remainClass = "text-red-600 font-semibold";
+                } else if (ps.status === "no_sell") {
+                  remainDisplay = humanCountdown(0); // show 00:00:00 in table
+                  remainClass = "text-gray-500";
                 }
 
                 return (
@@ -240,7 +281,6 @@ function RewardPlan({ plans = [], joinedAt = null, businessSummary = {} }) {
             </tbody>
           </table>
         </div>
-
       </div>
     </div>
   );
@@ -254,7 +294,7 @@ export default function Dashboard() {
   const payoutBalance = formatINR(props?.payout_wallet ?? 0);
   const TotalTeam = props?.total_team ?? 0;
   const CurrentPlan = props?.current_plan ?? "-";
-  const { left, right  } = usePage().props;
+  const { left, right } = usePage().props;
 
   const {
     user = {},
@@ -265,7 +305,13 @@ export default function Dashboard() {
 
   const userName = user?.name ?? "-";
   const userId = user?.id ?? "-";
-  const createdAt = formatDT(user?.created_at);
+
+  // prefer first sell created_at for "Joined" display if available, otherwise fallback to user.created_at
+  // backend (controller) should set 'fristsell' prop using:
+  // $firstsell = DB::table('sell')->where('buyer_id', $user->id)->where('status','paid')->orderBy('created_at','asc')->first();
+  const fristsellObj = props?.fristsell ?? null;
+  const createdAtRaw = fristsellObj?.created_at ?? user?.created_at;
+  const createdAt = formatDT(createdAtRaw);
 
   const rewardPlans = useMemo(
     () => [
@@ -358,7 +404,11 @@ export default function Dashboard() {
         </div>
 
         {/* Rewards */}
-        <RewardPlan plans={rewardPlans} joinedAt={user?.created_at} businessSummary={businessSummary} />
+        <RewardPlan
+          plans={rewardPlans}
+          businessSummary={businessSummary}
+          fristsell={fristsellObj}
+        />
 
         {/* Bottom banner */}
         <div className={`${G.barEmerald} rounded-lg py-8 text-center text-white shadow-md`}>
