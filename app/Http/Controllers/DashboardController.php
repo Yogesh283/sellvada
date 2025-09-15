@@ -339,7 +339,7 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             if ($r->leg === 'L') $L2 = (float)$r->amt;
             elseif ($r->leg === 'R') $R2 = (float)$r->amt;
         }
-        $matched = min($L2, $R2);
+        $matchedPlacement = min($L2, $R2);
 
         // ------------------ NEW: package-wise team business totals (subquery approach to avoid ONLY_FULL_GROUP_BY) ------------------
         $packageTotals = ['starter'=>0.0,'silver'=>0.0,'gold'=>0.0,'diamond'=>0.0,'other'=>0.0];
@@ -384,11 +384,60 @@ GROUP BY ttype
             }
         }
 
-        // compute slabs progress using $this->slabs
-        $rows = array_map(function ($s) use ($matched) {
-            $s['achieved']  = $matched >= $s['threshold'];
-            $s['progress']  = max(0, min(100, $s['threshold'] > 0 ? ($matched / $s['threshold']) * 100 : 0));
-            $s['remaining'] = max(0, $s['threshold'] - $matched);
+        // ------------------ NEW: Repurchase-specific aggregates ------------------
+        // 1) Placement-based repurchase totals (these affect star rank if you count repurchase in placement)
+        $repurchasePlacementLeft = 0.0;
+        $repurchasePlacementRight = 0.0;
+        $repurchasePlacementCountLeft = 0;
+        $repurchasePlacementCountRight = 0;
+        $repPlacementSql = $placementCte . "
+SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, COALESCE(SUM(r.amount),0) AS amt, COUNT(r.id) AS cnt
+FROM team t
+JOIN repurchase r ON r.buyer_id = t.id
+WHERE r.status='paid' {$dateSql}
+GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
+";
+        $repPlacementRows = DB::select($repPlacementSql, $binds);
+        foreach ($repPlacementRows as $pr) {
+            if ($pr->leg === 'L') { $repurchasePlacementLeft = (float)$pr->amt; $repurchasePlacementCountLeft = (int)$pr->cnt; }
+            if ($pr->leg === 'R') { $repurchasePlacementRight = (float)$pr->amt; $repurchasePlacementCountRight = (int)$pr->cnt; }
+        }
+        $matchedRepurchasePlacement = min($repurchasePlacementLeft, $repurchasePlacementRight);
+
+        // 2) Referral-based (team) repurchase totals (lifetime / or use date filter if present)
+        $repurchaseTeamLeft = 0.0;
+        $repurchaseTeamRight = 0.0;
+        $repurchaseTeamCountLeft = 0;
+        $repurchaseTeamCountRight = 0;
+        if ($hasReferral) {
+            // monthly-like filter: if from/to provided, use them; else compute lifetime
+            $repDateSql = '';
+            $repBinds = [$myReferralId];
+            if (!empty($dateSql)) {
+                // re-use $binds but first param is $myReferralId; in teamCte queries earlier we used [$myReferralId, ...date binds], so rebuild
+                // For simplicity, we'll compute lifetime (no date filter) and monthly separately
+            }
+            // lifetime
+            $repRows = DB::select($teamCte . "
+SELECT UPPER(COALESCE(u.position,'NA')) AS leg, COALESCE(SUM(r.amount),0) AS amt, COUNT(r.id) AS cnt
+FROM team u
+JOIN repurchase r ON r.buyer_id = u.id
+WHERE r.status='paid'
+GROUP BY UPPER(COALESCE(u.position,'NA'))
+", [$myReferralId]);
+
+            foreach ($repRows as $rr) {
+                if ($rr->leg === 'L') { $repurchaseTeamLeft = (float)$rr->amt; $repurchaseTeamCountLeft = (int)$rr->cnt; }
+                if ($rr->leg === 'R') { $repurchaseTeamRight = (float)$rr->amt; $repurchaseTeamCountRight = (int)$rr->cnt; }
+            }
+        }
+
+        // ------------------ STAR (placement) progress & income calculation ------------------
+        // Decide which matched to use for star calculation: placement sells (including repurchase) is used here (matchedPlacement)
+        $rows = array_map(function ($s) use ($matchedPlacement) {
+            $s['achieved']  = $matchedPlacement >= $s['threshold'];
+            $s['progress']  = max(0, min(100, $s['threshold'] > 0 ? ($matchedPlacement / $s['threshold']) * 100 : 0));
+            $s['remaining'] = max(0, $s['threshold'] - $matchedPlacement);
             return $s;
         }, $this->slabs);
 
@@ -396,6 +445,8 @@ GROUP BY ttype
         foreach ($rows as $s) {
             if ($s['achieved']) $current = $s;
         }
+
+        $starIncome = $current['income'] ?? 0;
 
         // Build safe user objects
         $userAll = [
@@ -435,7 +486,7 @@ GROUP BY ttype
             'fristsell'        => $firstsell,
             'left'             => $L2,
             'right'            => $R2,
-            'matched'          => $matched,
+            'matched'          => $matchedPlacement,
             'children'         => [
                 'left'  => $user->leftChild ? $user->leftChild->only(['id','name'])  : null,
                 'right' => $user->rightChild ? $user->rightChild->only(['id','name']) : null,
@@ -456,10 +507,27 @@ GROUP BY ttype
             // star summary
             'rows'             => $rows,
             'current'          => $current,
+            'star_income'      => $starIncome, // NEW: income value for current star
             'asOf'             => now()->toDateTimeString(),
             'filters'          => ['from' => $request->query('from'), 'to' => $request->query('to')],
             // package-wise team business totals
             'packageTotals'    => $packageTotals,
+            // NEW: repurchase aggregates
+            'repurchase' => [
+                'placement' => [
+                    'left' => $repurchasePlacementLeft,
+                    'right' => $repurchasePlacementRight,
+                    'matched' => $matchedRepurchasePlacement,
+                    'count_left' => $repurchasePlacementCountLeft,
+                    'count_right' => $repurchasePlacementCountRight,
+                ],
+                'team' => [
+                    'left' => $repurchaseTeamLeft,
+                    'right' => $repurchaseTeamRight,
+                    'count_left' => $repurchaseTeamCountLeft,
+                    'count_right' => $repurchaseTeamCountRight,
+                ],
+            ],
         ];
 
         // Return single Inertia response for dashboard

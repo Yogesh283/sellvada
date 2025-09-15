@@ -395,7 +395,7 @@ export default function Dashboard() {
         {/* Stat cards */}
         <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Fresh Matching" value="" icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
-          <StatCard title="VIP Repurchase Salary" value="" icon="📍" actionHref="/income/vip-repurchase-salary" gradient={G.amber} />
+          <StatCard title="VIP Weekly Salary" value="" icon="📍" actionHref="/income/vip-repurchase-salary" gradient={G.amber} />
           <StatCard title="Wallet Balance" value={availableBalance} icon="👛" gradient={G.tealBlue} />
           <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" gradient={G.emerald} />
           <StatCard title="MY PROFILE" value="" icon="👤" actionHref="/profile" gradient={G.sky} />

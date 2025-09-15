@@ -3,6 +3,12 @@ import { Head, Link, usePage } from "@inertiajs/react";
 import AuthenticatedLayout from "../Layouts/AuthenticatedLayout";
 import TeamTreeNode from "../Components/TeamTreeNode";
 
+/**
+ * TeamTree.jsx
+ * - Renders stats and tree
+ * - Keeps Chip component; optional packageTone helper included
+ */
+
 const Chip = ({ children, tone = "slate" }) => {
   const toneMap = {
     slate: "bg-slate-100 text-slate-700",
@@ -18,6 +24,23 @@ const Chip = ({ children, tone = "slate" }) => {
       {children}
     </span>
   );
+};
+
+/** optional: pick chip tone by canonical package name */
+const packageTone = (pkg) => {
+  const n = (pkg || "").toLowerCase().trim();
+  switch (n) {
+    case "starter":
+      return "red";
+    case "silver":
+      return "slate";
+    case "gold":
+      return "yellow";
+    case "diamond":
+      return "purple";
+    default:
+      return "slate";
+  }
 };
 
 const ViewToggle = ({ seedId, currentType }) => {
@@ -93,11 +116,11 @@ export default function TeamTree({ root = null, counts = {}, seed, type = "place
               <span className="font-medium">{counts?.right_nodes ?? 0}</span>
             </div>
 
-            {/* package chips including starter */}
-            <Chip tone="red">Starter: {counts?.pkg?.starter ?? 0}</Chip>
-            <Chip tone="slate">Silver: {counts?.pkg?.silver ?? 0}</Chip>
-            <Chip tone="yellow">Gold: {counts?.pkg?.gold ?? 0}</Chip>
-            <Chip tone="purple">Diamond: {counts?.pkg?.diamond ?? 0}</Chip>
+            {/* package chips using counts from backend/controller */}
+            <Chip tone={packageTone("starter")}>Starter: {counts?.pkg?.starter ?? 0}</Chip>
+            <Chip tone={packageTone("silver")}>Silver: {counts?.pkg?.silver ?? 0}</Chip>
+            <Chip tone={packageTone("gold")}>Gold: {counts?.pkg?.gold ?? 0}</Chip>
+            <Chip tone={packageTone("diamond")}>Diamond: {counts?.pkg?.diamond ?? 0}</Chip>
 
             <Chip tone="emerald">
               View: {type === "placement" ? "Placement" : "Referral"}

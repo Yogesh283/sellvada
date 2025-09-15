@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import { Link, usePage } from "@inertiajs/react";
 
+/**
+ * TeamTreeNode.jsx
+ * - Uses backend package string exactly for badge display (displayPkg)
+ * - Uses normalized package string for THEMES lookup (normalizedPkg)
+ */
+
 const THEMES = {
   diamond: {
     frame: "bg-emerald-500 border-emerald-600 text-white",
@@ -62,8 +68,11 @@ const HConn = ({ color = "#d1d5db", w = 60 }) => (
   </svg>
 );
 
-function Box({ title, id, pkg, open, onToggle, href, isRoot }) {
-  const t = THEMES[pkg] || THEMES.default;
+/** small helper: if backend sends null/empty, show fallback */
+const safeDisplay = (s) => (s === null || typeof s === "undefined" ? "" : String(s));
+
+function Box({ title, id, pkgNormalized, pkgDisplay, open, onToggle, href, isRoot }) {
+  const t = THEMES[pkgNormalized] || THEMES.default;
   return (
     <div className="relative w-[100px] sm:w-[112px]">
       <button
@@ -82,10 +91,12 @@ function Box({ title, id, pkg, open, onToggle, href, isRoot }) {
         >
           <span className="text-xs sm:text-sm">👤</span>
         </div>
+
         <div
-          className={`absolute top-1 right-1 text-[8px] px-1.5 rounded-full capitalize truncate max-w-[70px] ${t.badge}`}
+          className={`absolute top-1 right-1 text-[8px] px-1.5 rounded-full truncate max-w-[70px] ${t.badge}`}
+          title={safeDisplay(pkgDisplay)}
         >
-          {pkg ?? "No-Pack"}
+          {safeDisplay(pkgDisplay) || "No-Pack"}
         </div>
       </button>
 
@@ -122,8 +133,13 @@ export default function TeamTreeNode({ node, isRoot = false }) {
     }
   };
 
+  // --- PACKAGE: keep raw backend value for display, normalize only for theme lookup
+  const rawPkg = node.package ?? node.pkg ?? null;
+  const displayPkg = rawPkg; // show exactly what backend sent
+  const normalizedPkg = typeof rawPkg === "string" ? rawPkg.toLowerCase().trim() : null;
+
   const showChildren = open && (node.children?.L || node.children?.R);
-  const theme = THEMES[node.package] || THEMES.default;
+  const theme = THEMES[normalizedPkg] || THEMES.default;
 
   const wrapperCls = isRoot
     ? "flex flex-col items-center mx-auto"
@@ -134,7 +150,8 @@ export default function TeamTreeNode({ node, isRoot = false }) {
       <Box
         title={title}
         id={node.id}
-        pkg={node.package}
+        pkgNormalized={normalizedPkg}
+        pkgDisplay={displayPkg}
         open={open}
         onToggle={() => setOpen((v) => !v)}
         href={hrefFor(node.id)}
