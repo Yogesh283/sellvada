@@ -11,9 +11,6 @@ use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
-    /**
-     * Slab definitions (copied from StarIncomeController so Dashboard is self-contained)
-     */
     private array $slabs = [
         ['no'=>1,  'name'=>'1 STAR',  'threshold'=> 100000,      'income'=>   2000],
         ['no'=>2,  'name'=>'2 STAR',  'threshold'=> 200000,      'income'=>   4000],
@@ -34,14 +31,6 @@ class DashboardController extends Controller
         $user = Auth::user();
         abort_unless($user, 401);
 
-        // preload relations if present (optional)
-        $user->loadMissing([
-            'sponsor:id,name,email',
-            'leftChild:id,name,email',
-            'rightChild:id,name,email',
-        ]);
-
-        // Basic details
         $raw = $user->toArray();
         $mask = function (?string $v, int $keep = 2) {
             if (!$v) return null;
@@ -50,255 +39,100 @@ class DashboardController extends Controller
             return substr($v, 0, $keep) . str_repeat('*', max(0, $len - 2*$keep)) . substr($v, -$keep);
         };
 
-        // Immediate counts / simple queries
-        $directReferrals = DB::table('users')->where('sponsor_id', $user->id)->count();
-        $myReferralId = DB::table('users')->where('id', $user->id)->value('referral_id');
+        // basic ids
+        $userId = (int)$user->id;
+        $myReferralId = DB::table('users')->where('id', $userId)->value('referral_id');
+        $hasReferral = ! empty($myReferralId);
 
+        // recent personal sells (for UI)
         $recentSells = DB::table('sell')
-            ->where('buyer_id', $user->id)
+            ->where('buyer_id', $userId)
             ->orderByDesc('id')
             ->limit(10)
             ->get(['id','buyer_id','product','amount','type','status','created_at']);
 
-        // Prepare recursive CTE only if we have a referral root
-        $hasReferral = ! empty($myReferralId);
+        // wallet / payouts
+        $walletAmount = (float) DB::table('wallet')->where('user_id', $userId)->sum('amount');
+        $payoutAmount = (float) DB::table('_payout')->where('user_id', $userId)->sum('amount');
+        $payoutToday = (float) DB::table('_payout')
+            ->where('user_id', $userId)
+            ->whereDate('created_at', Carbon::today())
+            ->sum('amount');
 
-        $teamSells = collect();
-        $teamLeftSells = collect();
-        $teamRightSells = collect();
+        // first sell (fristsell expected by frontend)
+        $firstsell = DB::table('sell')
+            ->where('buyer_id', $userId)
+            ->where('status','paid')
+            ->orderBy('created_at','asc')
+            ->first();
 
+        // -------------------- TEAM (referral) CTE totals (sell & repurchase) --------------------
         $teamCte = "
 WITH RECURSIVE team AS (
-  SELECT id, referral_id, refer_by, position,
-         UPPER(COALESCE(position,'NA')) AS root_leg
+  SELECT id, referral_id, refer_by, position
   FROM users
   WHERE refer_by = ?
 
   UNION ALL
 
-  SELECT u.id, u.referral_id, u.refer_by, u.position, t.root_leg
+  SELECT u.id, u.referral_id, u.refer_by, u.position
   FROM users u
   JOIN team t ON u.refer_by = t.referral_id
 )
 ";
 
+        $teamSell = ['left'=>0.0,'right'=>0.0,'cnt_left'=>0,'cnt_right'=>0,'rows'=>[]];
+        $teamRep = ['left'=>0.0,'right'=>0.0,'cnt_left'=>0,'cnt_right'=>0,'rows'=>[]];
+
         if ($hasReferral) {
-            // recent team sells (all legs)
-            $teamSellsSql = $teamCte . "
-SELECT
-  s.id,
-  s.buyer_id,
-  buyer.name AS buyer_name,
-  s.product,
-  s.amount,
-  s.type,
-  s.status,
-  t.root_leg AS leg,
-  s.created_at
-FROM team t
-JOIN sell s ON s.buyer_id = t.id
-LEFT JOIN users buyer ON buyer.id = s.buyer_id
-ORDER BY s.id DESC
-LIMIT 10
+            // team sell totals (no date filter — lifetime). You can add date filters if you want monthly view.
+            $tsSql = $teamCte . "
+SELECT UPPER(COALESCE(u.position,'NA')) AS leg, COALESCE(SUM(s.amount),0) AS amt, COUNT(s.id) AS cnt
+FROM team u
+JOIN sell s ON s.buyer_id = u.id
+WHERE s.status='paid'
+GROUP BY UPPER(COALESCE(u.position,'NA'))
 ";
-            $teamSells = collect(DB::select($teamSellsSql, [$myReferralId]));
+            $tsRows = DB::select($tsSql, [$myReferralId]);
+            foreach ($tsRows as $r) {
+                if ($r->leg === 'L') { $teamSell['left'] = (float)$r->amt; $teamSell['cnt_left'] = (int)$r->cnt; }
+                if ($r->leg === 'R') { $teamSell['right'] = (float)$r->amt; $teamSell['cnt_right'] = (int)$r->cnt; }
+            }
+            $teamSell['rows'] = $tsRows;
 
-            // left sells
-            $teamLeftSql = $teamCte . "
-SELECT
-  s.id,
-  s.buyer_id,
-  buyer.name AS buyer_name,
-  s.product,
-  s.amount,
-  s.type,
-  s.status,
-  t.root_leg AS leg,
-  s.created_at
-FROM team t
-JOIN sell s ON s.buyer_id = t.id
-LEFT JOIN users buyer ON buyer.id = s.buyer_id
-WHERE t.root_leg = 'L'
-ORDER BY s.id DESC
-LIMIT 10
+            // team repurchase totals
+            $trSql = $teamCte . "
+SELECT UPPER(COALESCE(u.position,'NA')) AS leg, COALESCE(SUM(r.amount),0) AS amt, COUNT(r.id) AS cnt
+FROM team u
+JOIN repurchase r ON r.buyer_id = u.id
+WHERE r.status='paid'
+GROUP BY UPPER(COALESCE(u.position,'NA'))
 ";
-            $teamLeftSells = collect(DB::select($teamLeftSql, [$myReferralId]));
-
-            // right sells
-            $teamRightSql = $teamCte . "
-SELECT
-  s.id,
-  s.buyer_id,
-  buyer.name AS buyer_name,
-  s.product,
-  s.amount,
-  s.type,
-  s.status,
-  t.root_leg AS leg,
-  s.created_at
-FROM team t
-JOIN sell s ON s.buyer_id = t.id
-LEFT JOIN users buyer ON buyer.id = s.buyer_id
-WHERE t.root_leg = 'R'
-ORDER BY s.id DESC
-LIMIT 10
-";
-            $teamRightSells = collect(DB::select($teamRightSql, [$myReferralId]));
-        }
-
-        // Immediate left/right users
-        $leftUser  = $user->leftChild ? $user->leftChild->only(['id','name','email'])   : null;
-        $rightUser = $user->rightChild ? $user->rightChild->only(['id','name','email']) : null;
-
-        // Referral link activation check
-        $Ref = DB::table('sell')->where('buyer_id', $user->id)->where('status', 'paid')->orderByDesc('id')->value('type');
-
-        if ($Ref) {
-            $refLink = url('/register?refer_by=' . ($user->referral_id ?? ''));
-            $refral  = $user->referral_id;
+            $trRows = DB::select($trSql, [$myReferralId]);
+            foreach ($trRows as $r) {
+                if ($r->leg === 'L') { $teamRep['left'] = (float)$r->amt; $teamRep['cnt_left'] = (int)$r->cnt; }
+                if ($r->leg === 'R') { $teamRep['right'] = (float)$r->amt; $teamRep['cnt_right'] = (int)$r->cnt; }
+            }
+            $teamRep['rows'] = $trRows;
         } else {
-            $refLink = "Please purchase a plan to activate your referral link.";
-            $refral  = '-';
+            // fallback to sponsor-based sums if no referral root
+            $teamSell['left'] = (float) DB::table('sell')->where('sponsor_id',$userId)->where('status','paid')->where('leg','L')->sum('amount');
+            $teamSell['right'] = (float) DB::table('sell')->where('sponsor_id',$userId)->where('status','paid')->where('leg','R')->sum('amount');
+
+            $teamRep['left'] = (float) DB::table('repurchase')->where('refer_by',$user->referral_id ?? '')->where('status','paid')->sum('amount'); // best-effort fallback (may require schema adjust)
+            $teamRep['right'] = 0.0;
         }
 
-        // Wallets / payouts
-        $WalletAmount       = (float) DB::table('wallet')->where('user_id', $user->id)->sum('amount');
-        $PayoutAmount       = (float) DB::table('_payout')->where('user_id', $user->id)->sum('amount');
-        $PayoutAmountToday  = (float) DB::table('_payout')
-                                ->where('user_id', $user->id)
-                                ->whereDate('created_at', Carbon::today())
-                                ->sum('amount');
-
-        // Total team count (propagated CTE)
-        $totalTeam = 0;
-        if ($hasReferral) {
-            $row = DB::selectOne("
-                WITH RECURSIVE team AS (
-                    SELECT id, referral_id, refer_by, position
-                    FROM users
-                    WHERE refer_by = ?
-
-                    UNION ALL
-
-                    SELECT u.id, u.referral_id, u.refer_by, u.position
-                    FROM users u
-                    INNER JOIN team t ON u.refer_by = t.referral_id
-                )
-                SELECT COUNT(*) AS cnt FROM team
-            ", [$myReferralId]);
-
-            $totalTeam = (int) ($row->cnt ?? 0);
-        }
-
-        // ---------------- Business (Lifetime + Today First/Second Half) ----------------
-        $businessSummary = ['left' => 0.0, 'right' => 0.0];
-        $timewiseSales   = [
-            'first_half'  => ['left' => 0.0, 'right' => 0.0],
-            'second_half' => ['left' => 0.0, 'right' => 0.0],
+        $teamCombined = [
+            'left' => $teamSell['left'] + $teamRep['left'],
+            'right' => $teamSell['right'] + $teamRep['right'],
         ];
+        $teamCombined['matched'] = min($teamCombined['left'], $teamCombined['right']);
 
-        if ($hasReferral) {
-            // Lifetime (team-based)
-            $leftRow = DB::selectOne($teamCte . "
-                SELECT COALESCE(SUM(s.amount),0) AS amt
-                FROM team t
-                JOIN sell s ON s.buyer_id = t.id
-                WHERE t.root_leg = 'L' AND s.status = 'paid'
-            ", [$myReferralId]);
-
-            $rightRow = DB::selectOne($teamCte . "
-                SELECT COALESCE(SUM(s.amount),0) AS amt
-                FROM team t
-                JOIN sell s ON s.buyer_id = t.id
-                WHERE t.root_leg = 'R' AND s.status = 'paid'
-            ", [$myReferralId]);
-
-            $businessSummary['left']  = (float) ($leftRow->amt ?? 0);
-            $businessSummary['right'] = (float) ($rightRow->amt ?? 0);
-
-            // Today windows
-            $today = Carbon::today();
-            $firstStart  = $today->copy()->setTime(0,0,0)->format('Y-m-d H:i:s');
-            $firstEnd    = $today->copy()->setTime(11,59,59)->format('Y-m-d H:i:s');
-            $secondStart = $today->copy()->setTime(12,0,0)->format('Y-m-d H:i:s');
-            $secondEnd   = $today->copy()->setTime(23,59,59)->format('Y-m-d H:i:s');
-
-            // First half (team-based)
-            $fhLeft = DB::selectOne($teamCte . "
-                SELECT COALESCE(SUM(s.amount),0) AS amt
-                FROM team t
-                JOIN sell s ON s.buyer_id = t.id
-                WHERE t.root_leg = 'L' AND s.status = 'paid'
-                  AND s.created_at BETWEEN ? AND ?
-            ", [$myReferralId, $firstStart, $firstEnd]);
-
-            $fhRight = DB::selectOne($teamCte . "
-                SELECT COALESCE(SUM(s.amount),0) AS amt
-                FROM team t
-                JOIN sell s ON s.buyer_id = t.id
-                WHERE t.root_leg = 'R' AND s.status = 'paid'
-                  AND s.created_at BETWEEN ? AND ?
-            ", [$myReferralId, $firstStart, $firstEnd]);
-
-            // Second half (team-based)
-            $shLeft = DB::selectOne($teamCte . "
-                SELECT COALESCE(SUM(s.amount),0) AS amt
-                FROM team t
-                JOIN sell s ON s.buyer_id = t.id
-                WHERE t.root_leg = 'L' AND s.status = 'paid'
-                  AND s.created_at BETWEEN ? AND ?
-            ", [$myReferralId, $secondStart, $secondEnd]);
-
-            $shRight = DB::selectOne($teamCte . "
-                SELECT COALESCE(SUM(s.amount),0) AS amt
-                FROM team t
-                JOIN sell s ON s.buyer_id = t.id
-                WHERE t.root_leg = 'R' AND s.status = 'paid'
-                  AND s.created_at BETWEEN ? AND ?
-            ", [$myReferralId, $secondStart, $secondEnd]);
-
-            $timewiseSales['first_half']['left']   = (float) ($fhLeft->amt ?? 0);
-            $timewiseSales['first_half']['right']  = (float) ($fhRight->amt ?? 0);
-            $timewiseSales['second_half']['left']  = (float) ($shLeft->amt ?? 0);
-            $timewiseSales['second_half']['right'] = (float) ($shRight->amt ?? 0);
-
-        } else {
-            // Fallback to direct sponsor sums if no referral tree
-            $businessSummary['left']  = (float) DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'L')->where('status', 'paid')->sum('amount');
-            $businessSummary['right'] = (float) DB::table('sell')->where('sponsor_id', $user->id)->where('leg', 'R')->where('status', 'paid')->sum('amount');
-
-            $today = Carbon::today();
-            $timewiseSales['first_half']['left'] = (float) DB::table('sell')
-                ->where('sponsor_id', $user->id)->where('leg','L')->where('status','paid')
-                ->whereBetween('created_at', [$today->copy()->setTime(0,0,0), $today->copy()->setTime(11,59,59)])
-                ->sum('amount');
-
-            $timewiseSales['first_half']['right'] = (float) DB::table('sell')
-                ->where('sponsor_id', $user->id)->where('leg','R')->where('status','paid')
-                ->whereBetween('created_at', [$today->copy()->setTime(0,0,0), $today->copy()->setTime(11,59,59)])
-                ->sum('amount');
-
-            $timewiseSales['second_half']['left'] = (float) DB::table('sell')
-                ->where('sponsor_id', $user->id)->where('leg','L')->where('status','paid')
-                ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
-                ->sum('amount');
-
-            $timewiseSales['second_half']['right'] = (float) DB::table('sell')
-                ->where('sponsor_id', $user->id)->where('leg','R')->where('status','paid')
-                ->whereBetween('created_at', [$today->copy()->setTime(12,0,0), $today->copy()->setTime(23,59,59)])
-                ->sum('amount');
-        }
-
-        // Carry Forward (lifetime unmatched)
-        $carryTotals = [
-            'cf_left'  => max($businessSummary['left']  - $businessSummary['right'], 0),
-            'cf_right' => max($businessSummary['right'] - $businessSummary['left'], 0),
-        ];
-
-        // Build star summary (placement downline totals / slabs) — use same CTE approach
-        $uid = (int) $user->id;
+        // -------------------- PLACEMENT CTE (left_user_id / right_user_id) --------------------
+        $uid = $userId;
         $rootRow = DB::table('users')->where('id', $uid)->select('left_user_id','right_user_id')->first();
-        $leftRoot  = (int)($rootRow->left_user_id ?? 0);
+        $leftRoot = (int)($rootRow->left_user_id ?? 0);
         $rightRoot = (int)($rootRow->right_user_id ?? 0);
 
         $placementCte = "
@@ -317,123 +151,42 @@ WITH RECURSIVE team AS (
 )
 ";
 
-        $binds = [$uid, $leftRoot, $rightRoot];
-        $dateSql = '';
-        if ($request->query('from')) { $dateSql .= " AND DATE(s.created_at) >= ?"; $binds[] = $request->query('from'); }
-        if ($request->query('to'))   { $dateSql .= " AND DATE(s.created_at) <= ?"; $binds[] = $request->query('to'); }
-
-        // NOTE: added 'starter' to the list so starter sales count toward placement totals
-        $sql = $placementCte . "
-SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, SUM(s.amount) as amt
+        // placement sells (lifetime)
+        $placementSell = ['left'=>0.0,'right'=>0.0,'cnt_left'=>0,'cnt_right'=>0];
+        $psSql = $placementCte . "
+SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, COALESCE(SUM(s.amount),0) AS amt, COUNT(s.id) AS cnt
 FROM team t
 JOIN sell s ON s.buyer_id = t.id
 WHERE s.status='paid'
-  AND LOWER(s.type) IN ('starter','silver','gold','diamond','repurchase')
-  {$dateSql}
 GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
 ";
-        $placementRows = DB::select($sql, $binds);
-
-        $L2 = 0.0; $R2 = 0.0;
-        foreach ($placementRows as $r) {
-            if ($r->leg === 'L') $L2 = (float)$r->amt;
-            elseif ($r->leg === 'R') $R2 = (float)$r->amt;
-        }
-        $matchedPlacement = min($L2, $R2);
-
-        // ------------------ NEW: package-wise team business totals (subquery approach to avoid ONLY_FULL_GROUP_BY) ------------------
-        $packageTotals = ['starter'=>0.0,'silver'=>0.0,'gold'=>0.0,'diamond'=>0.0,'other'=>0.0];
-
-        // bucket CASE expression (we will use it inside a subquery and GROUP BY the alias)
-        $caseSql = "CASE WHEN LOWER(NULLIF(s.type,'')) IN ('starter','silver','gold','diamond') THEN LOWER(s.type) ELSE 'other' END";
-
-        if ($hasReferral) {
-            // Use subquery to compute buckets then aggregate — avoids ONLY_FULL_GROUP_BY issues and is portable
-            $pkgRowsSql = $teamCte . "
-SELECT ttype, COALESCE(SUM(amt),0) AS amt FROM (
-  SELECT {$caseSql} AS ttype, s.amount AS amt
-  FROM team t
-  JOIN sell s ON s.buyer_id = t.id
-  WHERE s.status = 'paid'
-) x
-GROUP BY ttype
-";
-            $pkgRows = DB::select($pkgRowsSql, [$myReferralId]);
-
-            foreach ($pkgRows as $pr) {
-                $k = strtolower((string)$pr->ttype ?: 'other');
-                if (!isset($packageTotals[$k])) $packageTotals[$k] = 0.0;
-                $packageTotals[$k] = (float)$pr->amt;
-            }
-        } else {
-            $pkgRowsSql = "
-SELECT ttype, COALESCE(SUM(amt),0) AS amt FROM (
-  SELECT {$caseSql} AS ttype, s.amount AS amt
-  FROM sell s
-  WHERE s.sponsor_id = ?
-    AND s.status = 'paid'
-) x
-GROUP BY ttype
-";
-            $pkgRows = DB::select($pkgRowsSql, [$user->id]);
-
-            foreach ($pkgRows as $pr) {
-                $k = strtolower((string)$pr->ttype ?: 'other');
-                if (!isset($packageTotals[$k])) $packageTotals[$k] = 0.0;
-                $packageTotals[$k] = (float)$pr->amt;
-            }
+        $psRows = DB::select($psSql, [$uid, $leftRoot, $rightRoot]);
+        foreach ($psRows as $r) {
+            if ($r->leg === 'L') { $placementSell['left'] = (float)$r->amt; $placementSell['cnt_left'] = (int)$r->cnt; }
+            if ($r->leg === 'R') { $placementSell['right'] = (float)$r->amt; $placementSell['cnt_right'] = (int)$r->cnt; }
         }
 
-        // ------------------ NEW: Repurchase-specific aggregates ------------------
-        // 1) Placement-based repurchase totals (these affect star rank if you count repurchase in placement)
-        $repurchasePlacementLeft = 0.0;
-        $repurchasePlacementRight = 0.0;
-        $repurchasePlacementCountLeft = 0;
-        $repurchasePlacementCountRight = 0;
-        $repPlacementSql = $placementCte . "
+        // placement repurchase
+        $placementRep = ['left'=>0.0,'right'=>0.0,'cnt_left'=>0,'cnt_right'=>0];
+        $prSql = $placementCte . "
 SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, COALESCE(SUM(r.amount),0) AS amt, COUNT(r.id) AS cnt
 FROM team t
 JOIN repurchase r ON r.buyer_id = t.id
-WHERE r.status='paid' {$dateSql}
+WHERE r.status='paid'
 GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
 ";
-        $repPlacementRows = DB::select($repPlacementSql, $binds);
-        foreach ($repPlacementRows as $pr) {
-            if ($pr->leg === 'L') { $repurchasePlacementLeft = (float)$pr->amt; $repurchasePlacementCountLeft = (int)$pr->cnt; }
-            if ($pr->leg === 'R') { $repurchasePlacementRight = (float)$pr->amt; $repurchasePlacementCountRight = (int)$pr->cnt; }
-        }
-        $matchedRepurchasePlacement = min($repurchasePlacementLeft, $repurchasePlacementRight);
-
-        // 2) Referral-based (team) repurchase totals (lifetime / or use date filter if present)
-        $repurchaseTeamLeft = 0.0;
-        $repurchaseTeamRight = 0.0;
-        $repurchaseTeamCountLeft = 0;
-        $repurchaseTeamCountRight = 0;
-        if ($hasReferral) {
-            // monthly-like filter: if from/to provided, use them; else compute lifetime
-            $repDateSql = '';
-            $repBinds = [$myReferralId];
-            if (!empty($dateSql)) {
-                // re-use $binds but first param is $myReferralId; in teamCte queries earlier we used [$myReferralId, ...date binds], so rebuild
-                // For simplicity, we'll compute lifetime (no date filter) and monthly separately
-            }
-            // lifetime
-            $repRows = DB::select($teamCte . "
-SELECT UPPER(COALESCE(u.position,'NA')) AS leg, COALESCE(SUM(r.amount),0) AS amt, COUNT(r.id) AS cnt
-FROM team u
-JOIN repurchase r ON r.buyer_id = u.id
-WHERE r.status='paid'
-GROUP BY UPPER(COALESCE(u.position,'NA'))
-", [$myReferralId]);
-
-            foreach ($repRows as $rr) {
-                if ($rr->leg === 'L') { $repurchaseTeamLeft = (float)$rr->amt; $repurchaseTeamCountLeft = (int)$rr->cnt; }
-                if ($rr->leg === 'R') { $repurchaseTeamRight = (float)$rr->amt; $repurchaseTeamCountRight = (int)$rr->cnt; }
-            }
+        $prRows = DB::select($prSql, [$uid, $leftRoot, $rightRoot]);
+        foreach ($prRows as $r) {
+            if ($r->leg === 'L') { $placementRep['left'] = (float)$r->amt; $placementRep['cnt_left'] = (int)$r->cnt; }
+            if ($r->leg === 'R') { $placementRep['right'] = (float)$r->amt; $placementRep['cnt_right'] = (int)$r->cnt; }
         }
 
-        // ------------------ STAR (placement) progress & income calculation ------------------
-        // Decide which matched to use for star calculation: placement sells (including repurchase) is used here (matchedPlacement)
+        $placementCombinedLeft = $placementSell['left'] + $placementRep['left'];
+        $placementCombinedRight = $placementSell['right'] + $placementRep['right'];
+        $placementCombinedMatched = min($placementCombinedLeft, $placementCombinedRight);
+
+        // -------------------- STAR (placement-based) calculation --------------------
+        $matchedPlacement = $placementCombinedMatched;
         $rows = array_map(function ($s) use ($matchedPlacement) {
             $s['achieved']  = $matchedPlacement >= $s['threshold'];
             $s['progress']  = max(0, min(100, $s['threshold'] > 0 ? ($matchedPlacement / $s['threshold']) * 100 : 0));
@@ -445,92 +198,83 @@ GROUP BY UPPER(COALESCE(u.position,'NA'))
         foreach ($rows as $s) {
             if ($s['achieved']) $current = $s;
         }
-
         $starIncome = $current['income'] ?? 0;
 
-        // Build safe user objects
-        $userAll = [
-            'id'               => $user->id,
-            'name'             => $user->name,
-            'email'            => $user->email,
-            'email_verified_at'=> $user->email_verified_at,
-            'password'         => $mask($raw['password'] ?? '', 3),
-            'referral_id'      => $refral,
-            'refer_by'         => $user->refer_by,
-            'parent_id'        => $user->parent_id,
-            'position'         => $user->position,
-            'left_user_id'     => $user->left_user_id,
-            'right_user_id'    => $user->right_user_id,
-            'remember_token'   => $mask($raw['remember_token'] ?? '', 3),
-            'created_at'       => $user->created_at,
-            'updated_at'       => $user->updated_at,
-            'sponsor_id'       => $user->sponsor_id,
-            'referral_code'    => $user->referral_code,
-        ];
+        // package totals (team sells bucketed)
+        $packageTotals = ['starter'=>0.0,'silver'=>0.0,'gold'=>0.0,'diamond'=>0.0,'other'=>0.0];
+        if ($hasReferral) {
+            $caseSql = "CASE WHEN LOWER(NULLIF(s.type,'')) IN ('starter','silver','gold','diamond') THEN LOWER(s.type) ELSE 'other' END";
+            $pkgSql = $teamCte . "
+SELECT ttype, COALESCE(SUM(amt),0) AS amt FROM (
+  SELECT {$caseSql} AS ttype, s.amount AS amt
+  FROM team t
+  JOIN sell s ON s.buyer_id = t.id
+  WHERE s.status = 'paid'
+) x
+GROUP BY ttype
+";
+            $pkgRows = DB::select($pkgSql, [$myReferralId]);
+            foreach ($pkgRows as $pr) {
+                $k = strtolower((string)$pr->ttype ?: 'other');
+                $packageTotals[$k] = (float)$pr->amt;
+            }
+        }
 
-        $userSafe = Arr::except($raw, ['password','remember_token','Password_plain']);
+        // businessSummary: pass combined team totals (sell+repurchase) — used by RewardPlan progress
+        $businessSummary = ['left' => $teamCombined['left'], 'right' => $teamCombined['right']];
 
-        $plan = DB::table('sell')->where('buyer_id', $user->id)->where('status', 'paid')->orderByDesc('id')->value('type');
-        $firstsell = DB::table('sell')->where('buyer_id', $user->id )->where('status', 'paid')->orderBy('created_at', 'asc')->first();
-
-        // Final props
+        // prepare props (ensure names match Dashboard.jsx)
         $props = [
-            'user'             => $userSafe,
-            'user_all'         => $userAll,
-            'sponsor'          => $user->sponsor ? $user->sponsor->only(['id','name','email']) : null,
-            'wallet_amount'    => $WalletAmount,
-            'payout_wallet'    => $PayoutAmount,
-            'today_profit'     => $PayoutAmountToday,
-            'total_team'       => $totalTeam,
-            'current_plan'     => $plan,
-            'fristsell'        => $firstsell,
-            'left'             => $L2,
-            'right'            => $R2,
-            'matched'          => $matchedPlacement,
-            'children'         => [
-                'left'  => $user->leftChild ? $user->leftChild->only(['id','name'])  : null,
-                'right' => $user->rightChild ? $user->rightChild->only(['id','name']) : null,
+            'user' => Arr::except($raw, ['password','remember_token','Password_plain']),
+            'user_all' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'password' => $mask($raw['password'] ?? '', 3),
+                'referral_id' => $user->referral_id,
             ],
-            'stats'            => [
-                'direct_referrals' => $directReferrals,
+            'wallet_amount' => $walletAmount,
+            'payout_wallet' => $payoutAmount,
+            'today_profit' => $payoutToday,
+            'total_team' => ($hasReferral ? (int) DB::selectOne("
+                WITH RECURSIVE team AS (
+                    SELECT id, referral_id, refer_by, position FROM users WHERE refer_by = ?
+                    UNION ALL
+                    SELECT u.id, u.referral_id, u.refer_by, u.position FROM users u JOIN team t ON u.refer_by = t.referral_id
+                )
+                SELECT COUNT(*) AS cnt FROM team
+            ", [$myReferralId])->cnt : 0),
+            'current_plan' => DB::table('sell')->where('buyer_id', $userId)->where('status','paid')->orderByDesc('id')->value('type'),
+            'fristsell' => $firstsell,
+            // placement left/right shown in UI
+            'left' => $placementCombinedLeft,
+            'right' => $placementCombinedRight,
+            // matched used by RewardPlan (set to team combined matched: sell+repurchase)
+            'matched' => $teamCombined['matched'],
+            // businessSummary passed to RewardPlan
+            'businessSummary' => $businessSummary,
+            // star/placement props
+            'rows' => $rows,
+            'current' => $current,
+            'star_income' => $starIncome,
+            // team & placement breakdowns for additional UI if needed
+            'team_sells' => $teamSell,
+            'team_repurchases' => $teamRep,
+            'team_combined' => $teamCombined,
+            'placement_sells' => $placementSell,
+            'placement_repurchases' => $placementRep,
+            'placement_combined' => [
+                'left' => $placementCombinedLeft,
+                'right' => $placementCombinedRight,
+                'matched' => $placementCombinedMatched,
             ],
-            'recent_sells'     => $recentSells,
-            'team_sells'       => $teamSells,
-            'team_left_sells'  => $teamLeftSells,
-            'team_right_sells' => $teamRightSells,
-            'left_user'        => $leftUser,
-            'right_user'       => $rightUser,
-            'ref_link'         => $refLink,
-            'businessSummary'  => $businessSummary,
-            'timewiseSales'    => $timewiseSales,
-            'carryTotals'      => $carryTotals,
-            // star summary
-            'rows'             => $rows,
-            'current'          => $current,
-            'star_income'      => $starIncome, // NEW: income value for current star
-            'asOf'             => now()->toDateTimeString(),
-            'filters'          => ['from' => $request->query('from'), 'to' => $request->query('to')],
-            // package-wise team business totals
-            'packageTotals'    => $packageTotals,
-            // NEW: repurchase aggregates
-            'repurchase' => [
-                'placement' => [
-                    'left' => $repurchasePlacementLeft,
-                    'right' => $repurchasePlacementRight,
-                    'matched' => $matchedRepurchasePlacement,
-                    'count_left' => $repurchasePlacementCountLeft,
-                    'count_right' => $repurchasePlacementCountRight,
-                ],
-                'team' => [
-                    'left' => $repurchaseTeamLeft,
-                    'right' => $repurchaseTeamRight,
-                    'count_left' => $repurchaseTeamCountLeft,
-                    'count_right' => $repurchaseTeamCountRight,
-                ],
-            ],
+            'packageTotals' => $packageTotals,
+            'recent_sells' => $recentSells,
+            'stats' => ['direct_referrals' => DB::table('users')->where('sponsor_id', $userId)->count()],
+            'ref_link' => (DB::table('sell')->where('buyer_id', $userId)->where('status','paid')->exists() ? url('/register?refer_by=' . ($user->referral_id ?? '')) : "Please purchase a plan to activate your referral link."),
+            'asOf' => now()->toDateTimeString(),
         ];
 
-        // Return single Inertia response for dashboard
         return Inertia::render('Dashboard', $props);
     }
 }

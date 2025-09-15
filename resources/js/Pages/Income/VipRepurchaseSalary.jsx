@@ -19,24 +19,16 @@ const formatINRCompact = (n) => {
 
 /* ---------------- page ---------------- */
 export default function VipRepurchaseSalary({
-  slabs = [
-    { rank: "VIP 1", volume: 30000, salary: 1000 },
-    { rank: "VIP 2", volume: 100000, salary: 3000 },
-    { rank: "VIP 3", volume: 200000, salary: 5000 },
-    { rank: "VIP 4", volume: 500000, salary: 10000 },
-    { rank: "VIP 5", volume: 1000000, salary: 25000 },
-    { rank: "VIP 6", volume: 2000000, salary: 50000 },
-    { rank: "VIP 7", volume: 5000000, salary: 100000 },
-  ],
-  summary = {
-    left: 0,
-    right: 0,
-    matched: 0,
-    achieved_rank: null,
-    paid_this_month: 0,
-    due: null,
-  },
-  month = "",
+  slabs = [],
+  summary = { left:0,right:0,matched:0, paid_this_month:0, due:null },
+  achieved_rank = null,
+  team_sells = {left:0,right:0,rows:[]},
+  team_repurchases = {left:0,right:0,rows:[]},
+  team_combined = {left:0,right:0,matched:0},
+  placement_sells = {left:0,right:0,cnt_left:0,cnt_right:0},
+  placement_repurchases = {left:0,right:0,cnt_left:0,cnt_right:0},
+  placement_combined = {left:0,right:0,matched:0},
+  month = ""
 }) {
   const [m, setM] = React.useState(month || new Date().toISOString().slice(0, 7));
   const matched = Number(summary?.matched || 0);
@@ -50,28 +42,16 @@ export default function VipRepurchaseSalary({
     });
   };
 
-  // Close Week handler (prompt optional date inside week or leave blank = previous week)
-  const onCloseWeek = async () => {
-    const txt = window.prompt("Enter any date inside the week to close (YYYY-MM-DD) or leave blank to close last week:", "");
-    if (txt === null) return;
-    const ok = window.confirm("Are you sure you want to close that week? This will finalize qualification for the selected week.");
-    if (!ok) return;
-
-    router.post("/income/vip-repurchase-salary/close-week", { week: txt || undefined }, {
-      onStart: () => {},
-      onSuccess: (page) => {
-        // show success flash (server will redirect back with session flash)
-        alert("Week closed successfully (check notifications).");
-        // refresh
-        router.visit(`/income/vip-repurchase-salary?month=${encodeURIComponent(m)}`, { preserveState: true, replace: true });
-      },
-      onError: () => {
-        alert("Failed to close week. Check console/logs.");
-      }
-    });
-  };
-
-  const achieved = summary?.achieved_rank ?? null;
+  // small helper to render a money card
+  function MoneyCard({ title, amount, subtitle }) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="text-[11px] uppercase tracking-wide text-gray-500">{title}</div>
+        <div className="mt-1 text-xl font-semibold text-gray-900">{formatINR(amount)}</div>
+        {subtitle && <div className="text-xs text-gray-500">{subtitle}</div>}
+      </div>
+    );
+  }
 
   // progress to next rank (based on matched)
   const currentIdx =
@@ -80,7 +60,7 @@ export default function VipRepurchaseSalary({
       .filter((v) => matched >= v)
       .length - 1;
   const next = slabs[currentIdx + 1] || null;
-  const base = slabs[Math.max(currentIdx, 0)] || slabs[0];
+  const base = slabs[Math.max(currentIdx, 0)] || slabs[0] || {volume:1};
   const baseVol = base?.volume || 1;
   const overallProgress = next
     ? Math.min(100, Math.round(((matched - baseVol) / (next.volume - baseVol)) * 100))
@@ -95,7 +75,7 @@ export default function VipRepurchaseSalary({
               VIP Repurchase Salary
             </h1>
             <p className="text-xs text-gray-500">
-              Monthly matching volumes decide your VIP rank & 3-month salary.
+              Monthly matching volumes decide your VIP rank & 3-month salary. (sell + repurchase combined)
             </p>
           </div>
 
@@ -106,20 +86,12 @@ export default function VipRepurchaseSalary({
               onChange={onMonthChange}
               className="w-[160px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
             />
-            {/* <button
-              onClick={onCloseWeek}
-              className="ml-2 rounded-md bg-amber-600 px-3 py-2 text-sm text-white shadow hover:bg-amber-700 transition"
-              title="Close specific or last week (Mon→Sun)"
-            >
-              Close Week (Mon→Sun)
-            </button> */}
           </div>
         </div>
       }
     >
       <Head title="VIP Repurchase Salary" />
 
-      {/* Gradient hero */}
       <div className="mx-auto max-w-6xl px-3 sm:px-6">
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 p-4 sm:p-6 text-white shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -128,20 +100,18 @@ export default function VipRepurchaseSalary({
               <div className="text-xl sm:text-2xl font-bold tracking-tight">{m}</div>
             </div>
 
-            {/* KPIs → 1/2/4 responsive grid */}
             <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4 min-w-[220px]">
-              <Kpi label="Left Volume" value={formatINR(summary?.left || 0)} />
-              <Kpi label="Right Volume" value={formatINR(summary?.right || 0)} />
-              <Kpi label="Matched" value={formatINR(matched || 0)} />
+              <Kpi label="Team Left (sell+repurchase)" value={formatINR(team_combined.left || 0)} />
+              <Kpi label="Team Right (sell+repurchase)" value={formatINR(team_combined.right || 0)} />
+              <Kpi label="Matched (combined)" value={formatINR(team_combined.matched || 0)} />
               <Kpi label="Paid This Month" value={formatINR(summary?.paid_this_month || 0)} />
             </div>
           </div>
 
-          {/* Progress to next rank */}
           <div className="mt-5 rounded-xl bg-white/10 p-3 sm:p-4 backdrop-blur-sm">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-[11px] sm:text-xs">
               <div className="font-medium">
-                {achieved ? `Current Rank: ${achieved}` : `Current Rank: —`}
+                {achieved_rank ? `Current Rank: ${achieved_rank}` : `Current Rank: —`}
               </div>
               <div className="opacity-90">
                 {next ? `Next: ${next.rank} at ${formatINR(next.volume)}` : "Max rank achieved"}
@@ -156,13 +126,12 @@ export default function VipRepurchaseSalary({
             </div>
           </div>
 
-          {/* Congrats / info pill */}
           <div className="mt-3">
-            {achieved ? (
+            {achieved_rank ? (
               <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-1.5 text-[13px] font-medium ring-1 ring-emerald-400/40">
                 <span>🎉</span>
                 <span>
-                  Congrats! You achieved <b>{achieved}</b> in <b>{m}</b>.
+                  Congrats! You achieved <b>{achieved_rank}</b> in <b>{m}</b>.
                 </span>
               </div>
             ) : (
@@ -172,42 +141,35 @@ export default function VipRepurchaseSalary({
               </div>
             )}
           </div>
-
-          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/20 blur-2xl" />
         </div>
 
-        {/* Cards row */}
+        {/* top KPI row */}
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Left Volume (Monthly)"
-            main={formatINR(summary?.left || 0)}
-            sub={`(${formatINRCompact(summary?.left || 0)})`}
-          />
-          <StatCard
-            title="Right Volume (Monthly)"
-            main={formatINR(summary?.right || 0)}
-            sub={`(${formatINRCompact(summary?.right || 0)})`}
-          />
-          <StatCard title="Matched Volume (Monthly)" main={formatINR(matched || 0)} sub={`min(Left, Right)`} />
-          <StatCard
-            title="Paid This Month"
-            main={formatINR(summary?.paid_this_month || 0)}
-            sub={
-              summary?.due && !summary?.due?.paid_at
-                ? `Due: ${formatINR(summary?.due?.amount)} (installment)`
-                : "—"
-            }
-          />
+          <MoneyCard title="Team Left (sell)" amount={team_sells.left} subtitle={`Placement: left`} />
+          <MoneyCard title="Team Right (sell)" amount={team_sells.right} subtitle={`Placement: right`} />
+          <MoneyCard title="Team Left (repurchase)" amount={team_repurchases.left} subtitle={`Placement: left`} />
+          <MoneyCard title="Team Right (repurchase)" amount={team_repurchases.right} subtitle={`Placement: right`} />
         </div>
 
-        {/* ------------------ slab table with progress bars ------------------ */}
+        {/* combined row */}
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <MoneyCard title="Team Combined Left (sell+repurchase)" amount={team_combined.left} />
+          <MoneyCard title="Team Combined Right (sell+repurchase)" amount={team_combined.right} />
+          <MoneyCard title="Team Combined Matched" amount={team_combined.matched} />
+        </div>
+
+        {/* Placement combined */}
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <MoneyCard title="Placement Combined Left" amount={placement_combined.left} />
+          <MoneyCard title="Placement Combined Right" amount={placement_combined.right} />
+        </div>
+
+        {/* Slab table (uses summary.matched which is combined) */}
         <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow">
-          {/* Gradient header */}
           <div className="bg-gradient-to-r from-indigo-600 to-violet-600 h-12 flex items-center px-4">
             <h3 className="text-sm font-semibold text-white">Salary Slabs (3 Months)</h3>
           </div>
 
-          {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
@@ -221,28 +183,22 @@ export default function VipRepurchaseSalary({
 
               <tbody className="divide-y divide-gray-100">
                 {slabs.map((s, idx) => {
-                  const hit = matched >= s.volume;
-                  const pct = Math.min(100, Math.round((matched / s.volume) * 100));
+                  const hit = (team_combined.matched || 0) >= s.volume;
+                  const pct = Math.min(100, Math.round(((team_combined.matched || 0) / s.volume) * 100));
                   const shownPct = isFinite(pct) ? pct : 0;
-                  const shownAmount = Math.min(matched, s.volume);
+                  const shownAmount = Math.min(team_combined.matched || 0, s.volume);
                   return (
-                    <tr
-                      key={idx}
-                      className={`transition-colors duration-200 ${hit ? "bg-emerald-50 hover:bg-emerald-100" : idx % 2 ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-gray-50"}`}
-                    >
+                    <tr key={idx} className={`transition-colors duration-200 ${hit ? "bg-emerald-50 hover:bg-emerald-100" : idx % 2 ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-gray-50"}`}>
                       <Td className="font-semibold px-4 py-3">{s.rank}</Td>
-
                       <Td className="whitespace-nowrap px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-mono">{formatINR(s.volume)}</span>
                           <span className="text-gray-400 text-xs">({formatINRCompact(s.volume)})</span>
                         </div>
                       </Td>
-
                       <Td className="whitespace-nowrap font-semibold px-4 py-3">
                         <span className="font-mono">{formatINR(s.salary)}</span>
                       </Td>
-
                       <Td className="px-4 py-3">
                         <div className="mb-2 text-[13px] flex items-center justify-between">
                           <div className="text-sm font-medium">
@@ -254,7 +210,6 @@ export default function VipRepurchaseSalary({
                           </div>
                           <div className="text-xs text-gray-500">{shownPct}%</div>
                         </div>
-
                         <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
                           <div
                             className={`h-full rounded-full ${hit ? 'bg-emerald-500' : 'bg-amber-400'}`}
@@ -270,13 +225,13 @@ export default function VipRepurchaseSalary({
             </table>
           </div>
 
-          {/* Mobile cards */}
+          {/* mobile */}
           <div className="md:hidden divide-y">
             {slabs.map((s, idx) => {
-              const hit = matched >= s.volume;
-              const pct = Math.min(100, Math.round((matched / s.volume) * 100));
+              const hit = (team_combined.matched || 0) >= s.volume;
+              const pct = Math.min(100, Math.round(((team_combined.matched || 0) / s.volume) * 100));
               const shownPct = isFinite(pct) ? pct : 0;
-              const shownAmount = Math.min(matched, s.volume);
+              const shownAmount = Math.min(team_combined.matched || 0, s.volume);
               return (
                 <div key={idx} className="p-4 bg-white hover:bg-gray-50 transition-colors duration-150">
                   <div className="flex items-center justify-between">
@@ -315,9 +270,25 @@ export default function VipRepurchaseSalary({
           </div>
         </div>
 
-        {/* Small note */}
-        <div className="mt-4 mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <b>Note:</b> VIP salary is paid for 3 months once a slab is achieved. Matching volume is calculated as <i>min(Left, Right)</i> for the selected month. Closing a week (Mon→Sun) will finalize qualification for that week and create 3 weekly installments due on the next three Mondays.
+        {/* debug / details: show raw team/placement numbers in a compact table */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-xl border bg-white p-4">
+            <h4 className="font-semibold mb-2">Team (referral) Breakdown</h4>
+            <div className="text-sm text-gray-600 mb-2">Sell: Left {formatINR(team_sells.left)} — Right {formatINR(team_sells.right)}</div>
+            <div className="text-sm text-gray-600 mb-2">Repurchase: Left {formatINR(team_repurchases.left)} — Right {formatINR(team_repurchases.right)}</div>
+            <div className="text-sm text-gray-800 font-medium">Combined: Left {formatINR(team_combined.left)} — Right {formatINR(team_combined.right)} — Matched {formatINR(team_combined.matched)}</div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <h4 className="font-semibold mb-2">Placement Breakdown</h4>
+            <div className="text-sm text-gray-600 mb-2">Sell: Left {formatINR(placement_sells.left)} — Right {formatINR(placement_sells.right)}</div>
+            <div className="text-sm text-gray-600 mb-2">Repurchase: Left {formatINR(placement_repurchases.left)} — Right {formatINR(placement_repurchases.right)}</div>
+            <div className="text-sm text-gray-800 font-medium">Combined: Left {formatINR(placement_combined.left)} — Right {formatINR(placement_combined.right)} — Matched {formatINR(placement_combined.matched)}</div>
+          </div>
+        </div>
+
+        <div className="mt-8 mb-12 text-sm text-gray-500">
+          <b>Note:</b> Above totals are computed for the selected month and include both <i>sell</i> and <i>repurchase</i> transactions (status='paid'). Matched = min(left, right) using combined values.
         </div>
       </div>
     </AuthenticatedLayout>
@@ -335,17 +306,6 @@ function Kpi({ label, value }) {
     </div>
   );
 }
-
-function StatCard({ title, main, sub }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="text-[11px] uppercase tracking-wide text-gray-500">{title}</div>
-      <div className="mt-1 text-xl font-semibold text-gray-900">{main}</div>
-      <div className="text-xs text-gray-500">{sub}</div>
-    </div>
-  );
-}
-
 function Th({ children, className = "" }) {
   return <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide ${className}`}>{children}</th>;
 }
