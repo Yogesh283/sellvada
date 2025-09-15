@@ -1,6 +1,6 @@
 // resources/js/Pages/Income/VipRepurchaseSalary.jsx
 import React from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 
 /* ---------------- helpers ---------------- */
@@ -18,21 +18,23 @@ const formatINRCompact = (n) => {
 };
 
 /* ---------------- page ---------------- */
-export default function VipRepurchaseSalary({
-  slabs = [],
-  summary = { left:0,right:0,matched:0, paid_this_month:0, due:null },
-  achieved_rank = null,
-  team_sells = {left:0,right:0,rows:[]},
-  team_repurchases = {left:0,right:0,rows:[]},
-  team_combined = {left:0,right:0,matched:0},
-  placement_sells = {left:0,right:0,cnt_left:0,cnt_right:0},
-  placement_repurchases = {left:0,right:0,cnt_left:0,cnt_right:0},
-  placement_combined = {left:0,right:0,matched:0},
-  month = ""
-}) {
-  const [m, setM] = React.useState(month || new Date().toISOString().slice(0, 7));
-  const matched = Number(summary?.matched || 0);
+export default function VipRepurchaseSalary() {
+  const page = usePage();
+  const server = page.props || {};
 
+  // slabs fallback (if controller didn't provide)
+  const slabs = server.slabs ?? [
+    { rank: "VIP 1", volume: 30000, salary: 1000 },
+    { rank: "VIP 2", volume: 100000, salary: 3000 },
+    { rank: "VIP 3", volume: 200000, salary: 5000 },
+    { rank: "VIP 4", volume: 500000, salary: 10000 },
+    { rank: "VIP 5", volume: 1000000, salary: 25000 },
+    { rank: "VIP 6", volume: 2000000, salary: 50000 },
+    { rank: "VIP 7", volume: 5000000, salary: 100000 },
+  ];
+
+  const monthProp = server.month ?? new Date().toISOString().slice(0, 7);
+  const [m, setM] = React.useState(monthProp);
   const onMonthChange = (e) => {
     const v = e.target.value;
     setM(v);
@@ -42,29 +44,23 @@ export default function VipRepurchaseSalary({
     });
   };
 
-  // small helper to render a money card
-  function MoneyCard({ title, amount, subtitle }) {
-    return (
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="text-[11px] uppercase tracking-wide text-gray-500">{title}</div>
-        <div className="mt-1 text-xl font-semibold text-gray-900">{formatINR(amount)}</div>
-        {subtitle && <div className="text-xs text-gray-500">{subtitle}</div>}
-      </div>
-    );
-  }
+  // --- use placementCombined ONLY ---
+  const placementCombined = server.placement_combined ?? { left: server.left ?? 0, right: server.right ?? 0 };
+  const placementSells = server.placement_sells ?? { left: 0, right: 0 };
+  const placementRepurchases = server.placement_repurchases ?? { left: 0, right: 0 };
 
-  // progress to next rank (based on matched)
-  const currentIdx =
-    slabs
-      .map((s) => s.volume)
-      .filter((v) => matched >= v)
-      .length - 1;
+  const left = Number(placementCombined.left || 0);
+  const right = Number(placementCombined.right || 0);
+  const matched = Math.min(left, right);
+  const pending = Math.abs(left - right);
+
+  // Precompute per-slab previous threshold for per-row progress calculation
+  const volumes = slabs.map((s) => Number(s.volume || 0));
+  const prevThreshold = (i) => (i === 0 ? 0 : volumes[i - 1]);
+
+  // for overall progress bar (if needed)
+  const currentIdx = volumes.filter((v) => matched >= v).length - 1;
   const next = slabs[currentIdx + 1] || null;
-  const base = slabs[Math.max(currentIdx, 0)] || slabs[0] || {volume:1};
-  const baseVol = base?.volume || 1;
-  const overallProgress = next
-    ? Math.min(100, Math.round(((matched - baseVol) / (next.volume - baseVol)) * 100))
-    : 100;
 
   return (
     <AuthenticatedLayout
@@ -75,7 +71,7 @@ export default function VipRepurchaseSalary({
               VIP Repurchase Salary
             </h1>
             <p className="text-xs text-gray-500">
-              Monthly matching volumes decide your VIP rank & 3-month salary. (sell + repurchase combined)
+              Monthly matching volumes decide your VIP rank & 3-month salary. (Showing <b>Placement combined</b> only)
             </p>
           </div>
 
@@ -93,131 +89,120 @@ export default function VipRepurchaseSalary({
       <Head title="VIP Repurchase Salary" />
 
       <div className="mx-auto max-w-6xl px-3 sm:px-6">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 p-4 sm:p-6 text-white shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-xs/6 opacity-95">Selected Month</div>
-              <div className="text-xl sm:text-2xl font-bold tracking-tight">{m}</div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4 min-w-[220px]">
-              <Kpi label="Team Left (sell+repurchase)" value={formatINR(team_combined.left || 0)} />
-              <Kpi label="Team Right (sell+repurchase)" value={formatINR(team_combined.right || 0)} />
-              <Kpi label="Matched (combined)" value={formatINR(team_combined.matched || 0)} />
-              <Kpi label="Paid This Month" value={formatINR(summary?.paid_this_month || 0)} />
+        {/* Placement Combined cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="rounded-xl border bg-white p-4 shadow-sm">
+            <div className="text-xs text-gray-500">Placement Combined Left</div>
+            <div className="mt-2 text-xl font-bold">{formatINR(left)}</div>
+            <div className="text-xs text-gray-400 mt-1">
+              Sell: {formatINR(placementSells.left)} • Repurchase: {formatINR(placementRepurchases.left)}
             </div>
           </div>
 
-          <div className="mt-5 rounded-xl bg-white/10 p-3 sm:p-4 backdrop-blur-sm">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-[11px] sm:text-xs">
-              <div className="font-medium">
-                {achieved_rank ? `Current Rank: ${achieved_rank}` : `Current Rank: —`}
-              </div>
-              <div className="opacity-90">
-                {next ? `Next: ${next.rank} at ${formatINR(next.volume)}` : "Max rank achieved"}
-              </div>
-            </div>
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/20">
-              <div
-                className="h-full rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.4)]"
-                style={{ width: `${overallProgress}%` }}
-                title={`${overallProgress}%`}
-              />
+          <div className="rounded-xl border bg-white p-4 shadow-sm">
+            <div className="text-xs text-gray-500">Placement Combined Right</div>
+            <div className="mt-2 text-xl font-bold">{formatINR(right)}</div>
+            <div className="text-xs text-gray-400 mt-1">
+              Sell: {formatINR(placementSells.right)} • Repurchase: {formatINR(placementRepurchases.right)}
             </div>
           </div>
+        </div>
 
-          <div className="mt-3">
-            {achieved_rank ? (
-              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-1.5 text-[13px] font-medium ring-1 ring-emerald-400/40">
-                <span>🎉</span>
-                <span>
-                  Congrats! You achieved <b>{achieved_rank}</b> in <b>{m}</b>.
-                </span>
+        {/* Matched single-line */}
+        <div className="mb-4">
+          <div className="rounded-lg border bg-white p-3 shadow-sm text-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="text-gray-700">
+                <strong>Placement Matched:</strong> {formatINR(matched)} &nbsp;•&nbsp; <span className="text-gray-500">Pending: {formatINR(pending)}</span>
               </div>
-            ) : (
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-[13px] font-medium ring-1 ring-white/30">
-                <span>📈</span>
-                <span>Keep pushing to unlock the next VIP rank.</span>
+
+              <div className="text-sm text-gray-600">
+                {next ? (
+                  <span className="ml-4 text-amber-600">Next slab ({next.rank}) needs: {formatINR(Math.max(0, Number(next.volume) - matched))}</span>
+                ) : (
+                  <span className="ml-4 text-emerald-600">Max slab reached</span>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        {/* top KPI row */}
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MoneyCard title="Team Left (sell)" amount={team_sells.left} subtitle={`Placement: left`} />
-          <MoneyCard title="Team Right (sell)" amount={team_sells.right} subtitle={`Placement: right`} />
-          <MoneyCard title="Team Left (repurchase)" amount={team_repurchases.left} subtitle={`Placement: left`} />
-          <MoneyCard title="Team Right (repurchase)" amount={team_repurchases.right} subtitle={`Placement: right`} />
-        </div>
-
-        {/* combined row */}
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <MoneyCard title="Team Combined Left (sell+repurchase)" amount={team_combined.left} />
-          <MoneyCard title="Team Combined Right (sell+repurchase)" amount={team_combined.right} />
-          <MoneyCard title="Team Combined Matched" amount={team_combined.matched} />
-        </div>
-
-        {/* Placement combined */}
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <MoneyCard title="Placement Combined Left" amount={placement_combined.left} />
-          <MoneyCard title="Placement Combined Right" amount={placement_combined.right} />
-        </div>
-
-        {/* Slab table (uses summary.matched which is combined) */}
-        <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow">
+        {/* Slabs table with per-row progress background */}
+        <div className="mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow">
           <div className="bg-gradient-to-r from-indigo-600 to-violet-600 h-12 flex items-center px-4">
-            <h3 className="text-sm font-semibold text-white">Salary Slabs (3 Months)</h3>
+            <h3 className="text-sm font-semibold text-white">Salary Slabs (3 week)</h3>
           </div>
 
-          <div className="hidden md:block overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-left text-gray-700 uppercase text-xs tracking-wider">
                   <Th className="w-36 rounded-tl-2xl">Rank</Th>
                   <Th>Monthly Matching Volume</Th>
                   <Th>Salary</Th>
-                  <Th className="w-56 text-center rounded-tr-2xl">Progress / Status</Th>
+                  <Th className="w-36 text-center rounded-tr-2xl">Progress</Th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-gray-100">
                 {slabs.map((s, idx) => {
-                  const hit = (team_combined.matched || 0) >= s.volume;
-                  const pct = Math.min(100, Math.round(((team_combined.matched || 0) / s.volume) * 100));
-                  const shownPct = isFinite(pct) ? pct : 0;
-                  const shownAmount = Math.min(team_combined.matched || 0, s.volume);
+                  const vol = Number(s.volume || 0);
+                  const prev = prevThreshold(idx);
+                  // determine per-row progress %:
+                  let pct = 0;
+                  if (matched >= vol) pct = 100;
+                  else if (matched <= prev) pct = 0;
+                  else pct = Math.round(((matched - prev) / (vol - prev)) * 100);
+
+                  const isFull = pct === 100;
+                  const isPartial = pct > 0 && pct < 100;
+
                   return (
-                    <tr key={idx} className={`transition-colors duration-200 ${hit ? "bg-emerald-50 hover:bg-emerald-100" : idx % 2 ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-gray-50"}`}>
-                      <Td className="font-semibold px-4 py-3">{s.rank}</Td>
-                      <Td className="whitespace-nowrap px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono">{formatINR(s.volume)}</span>
-                          <span className="text-gray-400 text-xs">({formatINRCompact(s.volume)})</span>
-                        </div>
-                      </Td>
-                      <Td className="whitespace-nowrap font-semibold px-4 py-3">
-                        <span className="font-mono">{formatINR(s.salary)}</span>
-                      </Td>
-                      <Td className="px-4 py-3">
-                        <div className="mb-2 text-[13px] flex items-center justify-between">
-                          <div className="text-sm font-medium">
-                            {hit ? (
-                              <span className="inline-flex items-center gap-2 text-emerald-700"><strong>Achieved</strong></span>
-                            ) : (
-                              <span className="text-gray-700 font-medium">{formatINR(shownAmount)} / {formatINR(s.volume)}</span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-500">{shownPct}%</div>
-                        </div>
-                        <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+                    <tr key={idx} className="relative">
+                      {/* single td spanning columns — inside we make a grid and background */}
+                      <td colSpan={4} className="p-0">
+                        <div className="relative">
+                          {/* background layer */}
                           <div
-                            className={`h-full rounded-full ${hit ? 'bg-emerald-500' : 'bg-amber-400'}`}
-                            style={{ width: `${shownPct}%` }}
-                            title={`${shownPct}% full`}
+                            className={`absolute inset-0 transition-colors pointer-events-none ${
+                              isFull ? "bg-emerald-50" : isPartial ? "bg-amber-50" : ""
+                            }`}
                           />
+                          {/* progress fill (only shows for partial rows) */}
+                          {isPartial && (
+                            <div
+                              className="absolute left-0 top-0 bottom-0 transition-all"
+                              style={{ width: `${pct}%`, background: "rgba(245, 158, 11, 0.12)" }} // soft amber fill
+                            />
+                          )}
+
+                          {/* content grid */}
+                          <div className="relative grid grid-cols-12 gap-4 items-center px-4 py-3">
+                            <div className="col-span-3 font-semibold text-gray-900">{s.rank}</div>
+
+                            <div className="col-span-4 text-gray-700">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono">{formatINR(vol)}</span>
+                                <span className="text-gray-400 text-xs">({formatINRCompact(vol)})</span>
+                              </div>
+                            </div>
+
+                            <div className="col-span-3 font-semibold text-gray-900">
+                              {formatINR(s.salary)}
+                            </div>
+
+                            <div className="col-span-2 text-right">
+                              {isFull ? (
+                                <StatusPill achieved />
+                              ) : isPartial ? (
+                                <div className="text-amber-600 font-medium">{pct}%</div>
+                              ) : (
+                                <StatusPill achieved={false} />
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </Td>
+                      </td>
                     </tr>
                   );
                 })}
@@ -225,44 +210,36 @@ export default function VipRepurchaseSalary({
             </table>
           </div>
 
-          {/* mobile */}
+          {/* mobile simplified list */}
           <div className="md:hidden divide-y">
             {slabs.map((s, idx) => {
-              const hit = (team_combined.matched || 0) >= s.volume;
-              const pct = Math.min(100, Math.round(((team_combined.matched || 0) / s.volume) * 100));
-              const shownPct = isFinite(pct) ? pct : 0;
-              const shownAmount = Math.min(team_combined.matched || 0, s.volume);
-              return (
-                <div key={idx} className="p-4 bg-white hover:bg-gray-50 transition-colors duration-150">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold">{s.rank}</div>
-                    <div className="text-xs">{hit ? <span className="text-emerald-700 font-semibold">Achieved</span> : `${shownPct}%`}</div>
-                  </div>
+              const vol = Number(s.volume || 0);
+              const prev = prevThreshold(idx);
+              let pct = 0;
+              if (matched >= vol) pct = 100;
+              else if (matched <= prev) pct = 0;
+              else pct = Math.round(((matched - prev) / (vol - prev)) * 100);
 
+              const isFull = pct === 100;
+              const isPartial = pct > 0 && pct < 100;
+
+              return (
+                <div key={idx} className={`p-4 ${isFull ? "bg-emerald-50" : isPartial ? "bg-amber-50" : "bg-white"}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">{s.rank}</div>
+                    <div>{isFull ? <StatusPill achieved /> : isPartial ? <div className="text-amber-600 font-medium">{pct}%</div> : <StatusPill achieved={false} />}</div>
+                  </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div className="text-gray-500">Monthly Matching</div>
                     <div className="text-right font-medium">
-                      <span className="font-mono">{formatINR(s.volume)}</span>{" "}
-                      <span className="text-gray-400">({formatINRCompact(s.volume)})</span>
+                      <span className="font-mono">{formatINR(vol)}</span>{" "}
+                      <span className="text-gray-400">({formatINRCompact(vol)})</span>
                     </div>
 
                     <div className="text-gray-500">Salary</div>
                     <div className="text-right font-semibold">
                       <span className="font-mono">{formatINR(s.salary)}</span>
                     </div>
-
-                    <div className="text-gray-500">Progress</div>
-                    <div className="text-right font-medium">
-                      {hit ? formatINR(s.volume) : `${formatINR(shownAmount)} / ${formatINR(s.volume)}`}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 h-3 w-full rounded-full bg-gray-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${hit ? 'bg-emerald-500' : 'bg-amber-400'}`}
-                      style={{ width: `${shownPct}%` }}
-                      title={`${shownPct}% full`}
-                    />
                   </div>
                 </div>
               );
@@ -270,45 +247,29 @@ export default function VipRepurchaseSalary({
           </div>
         </div>
 
-        {/* debug / details: show raw team/placement numbers in a compact table */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-xl border bg-white p-4">
-            <h4 className="font-semibold mb-2">Team (referral) Breakdown</h4>
-            <div className="text-sm text-gray-600 mb-2">Sell: Left {formatINR(team_sells.left)} — Right {formatINR(team_sells.right)}</div>
-            <div className="text-sm text-gray-600 mb-2">Repurchase: Left {formatINR(team_repurchases.left)} — Right {formatINR(team_repurchases.right)}</div>
-            <div className="text-sm text-gray-800 font-medium">Combined: Left {formatINR(team_combined.left)} — Right {formatINR(team_combined.right)} — Matched {formatINR(team_combined.matched)}</div>
-          </div>
-
-          <div className="rounded-xl border bg-white p-4">
-            <h4 className="font-semibold mb-2">Placement Breakdown</h4>
-            <div className="text-sm text-gray-600 mb-2">Sell: Left {formatINR(placement_sells.left)} — Right {formatINR(placement_sells.right)}</div>
-            <div className="text-sm text-gray-600 mb-2">Repurchase: Left {formatINR(placement_repurchases.left)} — Right {formatINR(placement_repurchases.right)}</div>
-            <div className="text-sm text-gray-800 font-medium">Combined: Left {formatINR(placement_combined.left)} — Right {formatINR(placement_combined.right)} — Matched {formatINR(placement_combined.matched)}</div>
-          </div>
-        </div>
-
-        <div className="mt-8 mb-12 text-sm text-gray-500">
-          <b>Note:</b> Above totals are computed for the selected month and include both <i>sell</i> and <i>repurchase</i> transactions (status='paid'). Matched = min(left, right) using combined values.
+        {/* Note */}
+        <div className="mt-4 mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <div><b>Note:</b> Placement combined = Sell + Repurchase (placement tree). Matching = <i>min(Left, Right)</i>. Pending = |Left − Right|.</div>
+          <div className="mt-2"><b>Weekly closing:</b> Salary week is Monday → Sunday and weekly closing can create weekly installments on next Monday (controller-side logic).</div>
         </div>
       </div>
     </AuthenticatedLayout>
   );
 }
 
-/* ---------------- UI bits ---------------- */
-function Kpi({ label, value }) {
+/* ---------------- small UI helpers ---------------- */
+function StatusPill({ achieved = false }) {
   return (
-    <div className="rounded-xl bg-white/10 px-4 py-3 text-white shadow-sm ring-1 ring-white/20">
-      <div className="text-[11px] opacity-90">{label}</div>
-      <div className="truncate text-lg font-semibold" title={value}>
-        {value}
-      </div>
-    </div>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+        achieved ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200" : "bg-gray-100 text-gray-600 ring-1 ring-gray-200"
+      }`}
+    >
+      {achieved ? "Achieved" : "Pending"}
+    </span>
   );
 }
+
 function Th({ children, className = "" }) {
   return <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide ${className}`}>{children}</th>;
-}
-function Td({ children, className = "" }) {
-  return <td className={`px-4 py-3 text-gray-800 ${className}`}>{children}</td>;
 }
