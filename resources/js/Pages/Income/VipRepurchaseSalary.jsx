@@ -3,7 +3,7 @@ import React from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 
-/* ---------------- helpers ---------------- */
+/* helpers */
 const formatINR = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
     Number(n || 0)
@@ -17,12 +17,10 @@ const formatINRCompact = (n) => {
   return `${num}`;
 };
 
-/* ---------------- page ---------------- */
 export default function VipRepurchaseSalary() {
   const page = usePage();
   const server = page.props || {};
 
-  // slabs fallback
   const slabs = server.slabs ?? [
     { rank: "VIP 1", volume: 30000, salary: 1000 },
     { rank: "VIP 2", volume: 100000, salary: 3000 },
@@ -44,37 +42,31 @@ export default function VipRepurchaseSalary() {
     });
   };
 
-  // server props (controller से आने चाहिए)
-  const placementCombined = server.placement_combined ?? { left: 0, right: 0 };
+  const placementCombined = server.placement_combined ?? { left: server.left ?? 0, right: server.right ?? 0 };
   const placementSells = server.placement_sells ?? { left: 0, right: 0 };
   const placementRepurchases = server.placement_repurchases ?? { left: 0, right: 0 };
-
-  // carry forward values
-  const carry = server.carry ?? { left: 0, right: 0 };
 
   const left = Number(placementCombined.left || 0);
   const right = Number(placementCombined.right || 0);
   const matched = Math.min(left, right);
   const pending = Math.abs(left - right);
 
-  // Precompute per-slab thresholds
+  // helpers for per-row progress
   const volumes = slabs.map((s) => Number(s.volume || 0));
   const prevThreshold = (i) => (i === 0 ? 0 : volumes[i - 1]);
 
+  // decide overall current index for header next-slab
   const currentIdx = volumes.filter((v) => matched >= v).length - 1;
   const next = slabs[currentIdx + 1] || null;
+  const achieved = server.achieved_rank ?? null;
 
   return (
     <AuthenticatedLayout
       header={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900">
-              VIP Repurchase Salary
-            </h1>
-            <p className="text-xs text-gray-500">
-              Matching volumes decide your VIP rank & 3-month salary. (Showing <b>Placement combined</b> only)
-            </p>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900">VIP Repurchase Salary</h1>
+            <p className="text-xs text-gray-500">Matching volumes decide your VIP rank & 3-month salary. (Showing Placement combined)</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -82,7 +74,7 @@ export default function VipRepurchaseSalary() {
               type="month"
               value={m}
               onChange={onMonthChange}
-              className="w-[160px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+              className="w-[160px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm"
             />
           </div>
         </div>
@@ -91,80 +83,101 @@ export default function VipRepurchaseSalary() {
       <Head title="VIP Repurchase Salary" />
 
       <div className="mx-auto max-w-6xl px-3 sm:px-6">
-        {/* Placement Combined cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <div className="rounded-xl border bg-white p-4 shadow-sm">
             <div className="text-xs text-gray-500">Placement Combined Left</div>
             <div className="mt-2 text-xl font-bold">{formatINR(left)}</div>
-            <div className="text-xs text-gray-400 mt-1">
-              Sell: {formatINR(placementSells.left)} • Repurchase: {formatINR(placementRepurchases.left)}
-            </div>
-            <div className="text-xs text-amber-600 mt-1">
-              Carry Forward: {formatINR(carry.left)}
-            </div>
+            <div className="text-xs text-gray-400 mt-1">Sell: {formatINR(placementSells.left)} • Repurchase: {formatINR(placementRepurchases.left)}</div>
+            <div className="text-xs text-gray-400 mt-2">Carry Forward: {formatINR(server?.carry_forward?.left ?? 0)}</div>
           </div>
 
           <div className="rounded-xl border bg-white p-4 shadow-sm">
             <div className="text-xs text-gray-500">Placement Combined Right</div>
             <div className="mt-2 text-xl font-bold">{formatINR(right)}</div>
-            <div className="text-xs text-gray-400 mt-1">
-              Sell: {formatINR(placementSells.right)} • Repurchase: {formatINR(placementRepurchases.right)}
-            </div>
-            <div className="text-xs text-amber-600 mt-1">
-              Carry Forward: {formatINR(carry.right)}
-            </div>
+            <div className="text-xs text-gray-400 mt-1">Sell: {formatINR(placementSells.right)} • Repurchase: {formatINR(placementRepurchases.right)}</div>
+            <div className="text-xs text-gray-400 mt-2">Carry Forward: {formatINR(server?.carry_forward?.right ?? 0)}</div>
           </div>
         </div>
 
-        {/* Matched + Carry Info */}
         <div className="mb-4">
           <div className="rounded-lg border bg-white p-3 shadow-sm text-sm">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="text-gray-700">
-                <strong>Matched This Period:</strong> {formatINR(matched)} &nbsp;•&nbsp; 
-                <span className="text-gray-500">Pending: {formatINR(pending)}</span>
+                <strong>Placement Matched:</strong> {formatINR(matched)} &nbsp;•&nbsp; <span className="text-gray-500">Pending: {formatINR(pending)}</span>
               </div>
 
               <div className="text-sm text-gray-600">
-                {next ? (
-                  <span className="ml-4 text-amber-600">
-                    Next slab ({next.rank}) needs: {formatINR(Math.max(0, Number(next.volume) - matched))}
-                  </span>
-                ) : (
-                  <span className="ml-4 text-emerald-600">Max slab reached</span>
-                )}
+                {next ? <span className="ml-4 text-amber-600">Next slab ({next.rank}) needs: {formatINR(Math.max(0, Number(next.volume) - matched))}</span> : <span className="ml-4 text-emerald-600">Max slab reached</span>}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Slabs Table (same as before) */}
-        {/* ... आपके slabs का वही table रहेगा ... */}
+        {/* SLAB TABLE — ALWAYS VISIBLE */}
+        <div className="mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow">
+          <div className="bg-gradient-to-r from-indigo-600 to-violet-600 h-12 flex items-center px-4">
+            <h3 className="text-sm font-semibold text-white">Salary Slabs (3 Months)</h3>
+          </div>
 
-        {/* Note */}
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-left text-gray-700 uppercase text-xs tracking-wider">
+                  <th className="px-4 py-3 w-40">Rank</th>
+                  <th className="px-4 py-3">Monthly Matching Volume</th>
+                  <th className="px-4 py-3">Salary</th>
+                  <th className="px-4 py-3 w-36 text-center">Progress / Status</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-100">
+                {slabs.map((s, idx) => {
+                  const vol = Number(s.volume || 0);
+                  const prev = prevThreshold(idx);
+                  let pct = 0;
+                  if (matched >= vol) pct = 100;
+                  else if (matched <= prev) pct = 0;
+                  else pct = Math.round(((matched - prev) / (vol - prev)) * 100);
+
+                  const isFull = pct === 100;
+                  const isPartial = pct > 0 && pct < 100;
+
+                  return (
+                    <tr key={idx} className={`${isFull ? "bg-emerald-50" : isPartial ? "bg-amber-50" : ""}`}>
+                      <td className="px-4 py-3 font-semibold">{s.rank}</td>
+
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono">{formatINR(vol)}</span>
+                          <span className="text-gray-400 text-xs">({formatINRCompact(vol)})</span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold">{formatINR(s.salary)}</td>
+
+                      <td className="px-4 py-3 text-center">
+                        {isFull ? (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700">Achieved</span>
+                        ) : isPartial ? (
+                          <div className="text-amber-600 font-medium">{pct}%</div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600">Pending</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div className="mt-4 mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <div><b>Note:</b> Placement combined = Sell + Repurchase. Matching = <i>min(Left, Right)</i>. Pending = |Left − Right|.</div>
-          <div className="mt-1"><b>Carry Forward:</b> Unmatched volume automatically forwarded to next closing.</div>
-          <div className="mt-1"><b>Weekly closing:</b> Salary week is Monday → Sunday. Weekly installments generated on next Monday.</div>
+          <div><b>Note:</b> Placement combined = Sell + Repurchase (placement tree). Matching = <i>min(Left, Right)</i>. Pending = |Left − Right|.</div>
+          <div className="mt-2"><b>Carry Forward:</b> unmatched volume from previous month forwarded automatically.</div>
+          <div className="mt-2"><b>Weekly closing:</b> Salary week is Monday → Sunday — closing command generates weekly installments on next Monday (server-side).</div>
         </div>
       </div>
     </AuthenticatedLayout>
   );
-}
-
-/* ---------------- small UI helpers ---------------- */
-function StatusPill({ achieved = false }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-        achieved ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200" : "bg-gray-100 text-gray-600 ring-1 ring-gray-200"
-      }`}
-    >
-      {achieved ? "Achieved" : "Pending"}
-    </span>
-  );
-}
-
-function Th({ children, className = "" }) {
-  return <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide ${className}`}>{children}</th>;
 }

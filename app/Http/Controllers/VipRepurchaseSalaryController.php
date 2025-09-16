@@ -15,85 +15,64 @@ class VipRepurchaseSalaryController extends Controller
         $userId = (int) Auth::id();
         abort_unless($userId, 401);
 
-        // Month window
+        // month param
         $monthStr = $request->query('month') ?: now()->format('Y-m');
         try {
-            $mStart = Carbon::parse($monthStr.'-01')->startOfMonth();
+            $mStart = Carbon::parse($monthStr . '-01')->startOfMonth();
         } catch (\Throwable $e) {
             $mStart = now()->startOfMonth();
         }
         $mEnd = (clone $mStart)->endOfMonth();
 
-        // team root = my referral_id (referral tree)
-        $myReferral = DB::table('users')->where('id', $userId)->value('referral_id');
-        $myReferral = is_null($myReferral) ? null : (string)$myReferral;
+        // previous month window (carry forward calculation)
+        $prevStart = (clone $mStart)->subMonthNoOverflow()->startOfMonth();
+        $prevEnd   = (clone $prevStart)->endOfMonth();
 
-        // load slabs either from table or fallback
+        // slabs from DB or fallback
         $slabsRaw = DB::table('repurchase_salary_slabs')->orderBy('threshold_volume','asc')->get();
         if ($slabsRaw->isEmpty()) {
             $slabs = [
-                ['rank' => 'VIP 1', 'volume' => 30000, 'salary' => 1000],
-                ['rank' => 'VIP 2', 'volume' => 100000, 'salary' => 3000],
-                ['rank' => 'VIP 3', 'volume' => 200000, 'salary' => 5000],
-                ['rank' => 'VIP 4', 'volume' => 500000, 'salary' => 10000],
-                ['rank' => 'VIP 5', 'volume' => 1000000, 'salary' => 25000],
-                ['rank' => 'VIP 6', 'volume' => 2000000, 'salary' => 50000],
-                ['rank' => 'VIP 7', 'volume' => 5000000, 'salary' => 100000],
+                ['rank' => 'VIP 1', 'volume' => 30000, 'salary' => 1000, 'vip_no'=>1],
+                ['rank' => 'VIP 2', 'volume' => 100000, 'salary' => 3000, 'vip_no'=>2],
+                ['rank' => 'VIP 3', 'volume' => 200000, 'salary' => 5000, 'vip_no'=>3],
+                ['rank' => 'VIP 4', 'volume' => 500000, 'salary' => 10000, 'vip_no'=>4],
+                ['rank' => 'VIP 5', 'volume' => 1000000, 'salary' => 25000, 'vip_no'=>5],
+                ['rank' => 'VIP 6', 'volume' => 2000000, 'salary' => 50000, 'vip_no'=>6],
+                ['rank' => 'VIP 7', 'volume' => 5000000, 'salary' => 100000, 'vip_no'=>7],
             ];
         } else {
             $slabs = $slabsRaw->map(function ($r) {
-                return ['rank' => ($r->rank ?? ('VIP ' . ($r->vip_no ?? '?'))), 'volume' => (float)$r->threshold_volume, 'salary' => (float)$r->salary_amount];
+                return [
+                    'rank' => ($r->rank ?? ('VIP ' . ($r->vip_no ?? '?'))),
+                    'volume' => (float)($r->threshold_volume ?? 0),
+                    'salary' => (float)($r->salary_amount ?? 0),
+                    'vip_no' => $r->vip_no ?? null,
+                ];
             })->toArray();
         }
 
-        // defaults
-        $summary = ['left'=>0.0,'right'=>0.0,'matched'=>0.0,'paid_this_month'=>0.0,'due'=>null];
-        $achieved = null;
+        // get placement roots & referral id
+        $rootRow = DB::table('users')->where('id', $userId)->select('left_user_id','right_user_id','referral_id')->first();
+        $leftRoot  = (int)($rootRow->left_user_id ?? 0);
+        $rightRoot = (int)($rootRow->right_user_id ?? 0);
+        $myReferral = $rootRow->referral_id ?? null;
 
-        // Compute referral-team combined (sell + repurchase) for selected month
-        $teamSells = ['left'=>0.0,'right'=>0.0,'cnt_left'=>0,'cnt_right'=>0];
-        $teamRep = ['left'=>0.0,'right'=>0.0,'cnt_left'=>0,'cnt_right'=>0];
-
-        if ($myReferral) {
-            // sells
-            $sellRows = DB::select($this->teamCte() . "
-SELECT UPPER(COALESCE(u.position,'NA')) AS leg, COALESCE(SUM(s.amount),0) AS amt, COUNT(s.id) AS cnt
-FROM team u
-JOIN sell s ON s.buyer_id = u.id
-WHERE s.status='paid' AND s.created_at BETWEEN ? AND ?
-GROUP BY UPPER(COALESCE(u.position,'NA'))
-", [$myReferral, $mStart, $mEnd]);
-
-            foreach ($sellRows as $r) {
-                if ($r->leg === 'L') { $teamSells['left'] = (float)$r->amt; $teamSells['cnt_left'] = (int)$r->cnt; }
-                if ($r->leg === 'R') { $teamSells['right'] = (float)$r->amt; $teamSells['cnt_right'] = (int)$r->cnt; }
-            }
-
-            // repurchases
-            $repRows = DB::select($this->teamCte() . "
-SELECT UPPER(COALESCE(u.position,'NA')) AS leg, COALESCE(SUM(r.amount),0) AS amt, COUNT(r.id) AS cnt
-FROM team u
-JOIN repurchase r ON r.buyer_id = u.id
-WHERE r.status='paid' AND r.created_at BETWEEN ? AND ?
-GROUP BY UPPER(COALESCE(u.position,'NA'))
-", [$myReferral, $mStart, $mEnd]);
-
-            foreach ($repRows as $r) {
-                if ($r->leg === 'L') { $teamRep['left'] = (float)$r->amt; $teamRep['cnt_left'] = (int)$r->cnt; }
-                if ($r->leg === 'R') { $teamRep['right'] = (float)$r->amt; $teamRep['cnt_right'] = (int)$r->cnt; }
-            }
+        // if no placement root, return zeros (still show slab table)
+        if (!$leftRoot && !$rightRoot) {
+            return Inertia::render('Income/VipRepurchaseSalary', [
+                'month' => $mStart->format('Y-m'),
+                'slabs' => $slabs,
+                'placement_sells' => ['left'=>0,'right'=>0,'cnt_left'=>0,'cnt_right'=>0],
+                'placement_repurchases' => ['left'=>0,'right'=>0,'cnt_left'=>0,'cnt_right'=>0],
+                'placement_combined' => ['left'=>0,'right'=>0],
+                'placement_matched' => 0,
+                'placement_pending' => 0,
+                'carry_forward' => ['left'=>0,'right'=>0],
+                'paid_this_month' => 0,
+            ]);
         }
 
-        $teamCombinedLeft = $teamSells['left'] + $teamRep['left'];
-        $teamCombinedRight = $teamSells['right'] + $teamRep['right'];
-        $teamCombinedMatched = min($teamCombinedLeft, $teamCombinedRight);
-
-        // Placement-based combined totals (placement tree)
-        $uid = (int)$userId;
-        $rootRow = DB::table('users')->where('id',$uid)->select('left_user_id','right_user_id')->first();
-        $leftRoot = (int)($rootRow->left_user_id ?? 0);
-        $rightRoot = (int)($rootRow->right_user_id ?? 0);
-
+        // placement recursive CTE
         $placementCte = "
 WITH RECURSIVE team AS (
   SELECT id, left_user_id, right_user_id, 'NA' AS root_leg
@@ -110,114 +89,96 @@ WITH RECURSIVE team AS (
 )
 ";
 
-        // placement sells
-        $placementSellLeft = $placementSellRight = 0.0;
-        $placementRepLeft = $placementRepRight = 0.0;
+        $binds = [$userId, $leftRoot, $rightRoot];
 
-        $placementSellRows = DB::select($placementCte . "
-SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, COALESCE(SUM(s.amount),0) AS amt
+        // sells in month (placement)
+        $placementSellsSql = $placementCte . "
+SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, COALESCE(SUM(s.amount),0) AS amt, COUNT(s.id) AS cnt
 FROM team t
 JOIN sell s ON s.buyer_id = t.id
-WHERE s.status='paid' AND s.created_at BETWEEN ? AND ?
+WHERE s.status = 'paid'
+  AND s.created_at BETWEEN ? AND ?
 GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
-", [$uid, $leftRoot, $rightRoot, $mStart, $mEnd]);
-
-        foreach ($placementSellRows as $r) {
-            if ($r->leg === 'L') $placementSellLeft = (float)$r->amt;
-            if ($r->leg === 'R') $placementSellRight = (float)$r->amt;
+";
+        $sellRows = DB::select($placementSellsSql, array_merge($binds, [$mStart, $mEnd]));
+        $placementSells = ['left'=>0,'right'=>0,'cnt_left'=>0,'cnt_right'=>0];
+        foreach ($sellRows as $r) {
+            if ($r->leg === 'L') { $placementSells['left'] = (float)$r->amt; $placementSells['cnt_left'] = (int)$r->cnt; }
+            if ($r->leg === 'R') { $placementSells['right'] = (float)$r->amt; $placementSells['cnt_right'] = (int)$r->cnt; }
         }
 
-        $placementRepRows = DB::select($placementCte . "
-SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, COALESCE(SUM(r.amount),0) AS amt
+        // repurchases in month (placement)
+        $placementRepSql = $placementCte . "
+SELECT UPPER(COALESCE(t.root_leg,'NA')) AS leg, COALESCE(SUM(r.amount),0) AS amt, COUNT(r.id) AS cnt
 FROM team t
 JOIN repurchase r ON r.buyer_id = t.id
-WHERE r.status='paid' AND r.created_at BETWEEN ? AND ?
+WHERE r.status = 'paid'
+  AND r.created_at BETWEEN ? AND ?
 GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
-", [$uid, $leftRoot, $rightRoot, $mStart, $mEnd]);
-
-        foreach ($placementRepRows as $r) {
-            if ($r->leg === 'L') $placementRepLeft = (float)$r->amt;
-            if ($r->leg === 'R') $placementRepRight = (float)$r->amt;
+";
+        $repRows = DB::select($placementRepSql, array_merge($binds, [$mStart, $mEnd]));
+        $placementRepurchases = ['left'=>0,'right'=>0,'cnt_left'=>0,'cnt_right'=>0];
+        foreach ($repRows as $r) {
+            if ($r->leg === 'L') { $placementRepurchases['left'] = (float)$r->amt; $placementRepurchases['cnt_left'] = (int)$r->cnt; }
+            if ($r->leg === 'R') { $placementRepurchases['right'] = (float)$r->amt; $placementRepurchases['cnt_right'] = (int)$r->cnt; }
         }
 
-        $placementCombinedLeft = $placementSellLeft + $placementRepLeft;
-        $placementCombinedRight = $placementSellRight + $placementRepRight;
-        $placementCombinedMatched = min($placementCombinedLeft, $placementCombinedRight);
+        // combine
+        $placementCombined = [
+            'left'  => $placementSells['left'] + $placementRepurchases['left'],
+            'right' => $placementSells['right'] + $placementRepurchases['right'],
+        ];
+        $placementMatched = min($placementCombined['left'], $placementCombined['right']);
+        $placementPending = abs($placementCombined['left'] - $placementCombined['right']);
 
-        // choose matched used to show slabs — you said placement-only earlier; here we show placementCombined by default
-        $matched = $placementCombinedMatched;
+        // previous month combined for carry-forward
+        $prevSellRows = DB::select($placementSellsSql, array_merge($binds, [$prevStart, $prevEnd]));
+        $prevRepRows  = DB::select($placementRepSql, array_merge($binds, [$prevStart, $prevEnd]));
+        $prevSells = ['left'=>0,'right'=>0]; $prevReps=['left'=>0,'right'=>0];
+        foreach ($prevSellRows as $r) {
+            if ($r->leg === 'L') $prevSells['left'] = (float)$r->amt;
+            if ($r->leg === 'R') $prevSells['right'] = (float)$r->amt;
+        }
+        foreach ($prevRepRows as $r) {
+            if ($r->leg === 'L') $prevReps['left'] = (float)$r->amt;
+            if ($r->leg === 'R') $prevReps['right'] = (float)$r->amt;
+        }
+        $prevCombined = [
+            'left' => $prevSells['left'] + $prevReps['left'],
+            'right' => $prevSells['right'] + $prevReps['right'],
+        ];
+        $carryForward = [
+            'left' => max(0, $prevCombined['left'] - $prevCombined['right']),
+            'right'=> max(0, $prevCombined['right'] - $prevCombined['left']),
+        ];
 
-        // Highest slab achieved
+        // find highest slab achieved by placementMatched
         $achievedRank = null;
         foreach ($slabs as $s) {
-            if ($matched >= $s['volume']) $achievedRank = $s['rank'];
+            if ($placementMatched >= (float)$s['volume']) {
+                $achievedRank = $s['rank'];
+            }
         }
 
-        // paid this month already
+        // paid this month (optional)
         $paidThisMonth = (float) DB::table('_payout')
             ->where('to_user_id', $userId)
-            ->whereIn('type', ['repurchase_salary','repurchase_salary_weekly'])
+            ->whereIn('type', ['repurchase_salary','repurchase_salary_weekly','repurchase_salary_monthly'])
             ->whereBetween('created_at', [$mStart, $mEnd])
             ->sum('amount');
 
-        // current due installment (first unpaid within month)
-        $due = DB::table('repurchase_salary_installments as i')
-            ->join('repurchase_salary_qualifications as q', 'q.id', '=', 'i.qualification_id')
-            ->where('q.sponsor_id', $userId)
-            ->whereBetween(DB::raw('DATE(i.due_month)'), [$mStart->toDateString(), $mEnd->toDateString()])
-            ->select('i.id','i.amount','i.due_month','i.paid_at','q.months_total','q.months_paid')
-            ->orderBy('i.due_month','asc')
-            ->first();
-
-        $summary = [
-            'left' => $placementCombinedLeft,
-            'right' => $placementCombinedRight,
-            'matched' => $matched,
-            'paid_this_month' => $paidThisMonth,
-            'due' => $due,
-        ];
-
+        // return Inertia props
         return Inertia::render('Income/VipRepurchaseSalary', [
             'month' => $mStart->format('Y-m'),
             'slabs' => $slabs,
-            'summary' => $summary,
+            'placement_sells' => $placementSells,
+            'placement_repurchases' => $placementRepurchases,
+            'placement_combined' => $placementCombined,
+            'placement_matched' => $placementMatched,
+            'placement_pending' => $placementPending,
+            'carry_forward' => $carryForward,
             'achieved_rank' => $achievedRank,
-            // extras for frontend breakdown display
-            'team_combined' => [
-                'left' => $teamCombinedLeft,
-                'right' => $teamCombinedRight,
-                'matched' => $teamCombinedMatched,
-                'sell_left' => $teamSells['left'],
-                'sell_right' => $teamSells['right'],
-                'rep_left' => $teamRep['left'],
-                'rep_right' => $teamRep['right'],
-            ],
-            'placement_combined' => [
-                'left' => $placementCombinedLeft,
-                'right' => $placementCombinedRight,
-                'matched' => $placementCombinedMatched,
-                'sell_left' => $placementSellLeft,
-                'sell_right' => $placementSellRight,
-                'rep_left' => $placementRepLeft,
-                'rep_right' => $placementRepRight,
-            ],
+            'paid_this_month' => $paidThisMonth,
         ]);
-    }
-
-    protected function teamCte(): string
-    {
-        return "
-WITH RECURSIVE team AS (
-  SELECT id, referral_id, refer_by, position, 1 AS lvl
-  FROM users
-  WHERE refer_by = ?
-
-  UNION ALL
-
-  SELECT u.id, u.referral_id, u.refer_by, u.position, t.lvl + 1
-  FROM users u
-  JOIN team t ON u.refer_by = t.referral_id
-)
-";
     }
 }
