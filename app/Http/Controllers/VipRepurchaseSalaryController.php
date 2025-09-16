@@ -68,11 +68,12 @@ class VipRepurchaseSalaryController extends Controller
                 'placement_matched' => 0,
                 'placement_pending' => 0,
                 'carry_forward' => ['left'=>0,'right'=>0],
+                'achieved_rank' => null,
                 'paid_this_month' => 0,
             ]);
         }
 
-        // placement recursive CTE
+        // placement recursive CTE (walk left/right subtree)
         $placementCte = "
 WITH RECURSIVE team AS (
   SELECT id, left_user_id, right_user_id, 'NA' AS root_leg
@@ -123,15 +124,15 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             if ($r->leg === 'R') { $placementRepurchases['right'] = (float)$r->amt; $placementRepurchases['cnt_right'] = (int)$r->cnt; }
         }
 
-        // combine
+        // combine current month
         $placementCombined = [
             'left'  => $placementSells['left'] + $placementRepurchases['left'],
             'right' => $placementSells['right'] + $placementRepurchases['right'],
         ];
-        $placementMatched = min($placementCombined['left'], $placementCombined['right']);
-        $placementPending = abs($placementCombined['left'] - $placementCombined['right']);
+        $matchedActual = min($placementCombined['left'], $placementCombined['right']);
+        $pendingActual = abs($placementCombined['left'] - $placementCombined['right']);
 
-        // previous month combined for carry-forward
+        // previous month combined for carry-forward (fallback)
         $prevSellRows = DB::select($placementSellsSql, array_merge($binds, [$prevStart, $prevEnd]));
         $prevRepRows  = DB::select($placementRepSql, array_merge($binds, [$prevStart, $prevEnd]));
         $prevSells = ['left'=>0,'right'=>0]; $prevReps=['left'=>0,'right'=>0];
@@ -147,15 +148,44 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             'left' => $prevSells['left'] + $prevReps['left'],
             'right' => $prevSells['right'] + $prevReps['right'],
         ];
-        $carryForward = [
+        $carryForwardComputed = [
             'left' => max(0, $prevCombined['left'] - $prevCombined['right']),
             'right'=> max(0, $prevCombined['right'] - $prevCombined['left']),
         ];
 
-        // find highest slab achieved by placementMatched
+        // Now check repurchase_carry table for explicit carry (preferred)
+        $carryRow = DB::table('repurchase_carry')->where('sponsor_id', $userId)->first();
+        $carryFromTable = [
+            'left'  => (float) ($carryRow->left ?? 0),
+            'right' => (float) ($carryRow->right ?? 0),
+        ];
+
+        // Check if user already qualified for this period (period stored as YYYY-MM-DD in period_month)
+        $periodMarker = $mStart->toDateString();
+        $qual = DB::table('repurchase_salary_qualifications')
+            ->where('sponsor_id', $userId)
+            ->where('period_month', $periodMarker)
+            ->first();
+
+        // Decide what to display for matched & pending:
+        // - If user has qualification record for this period => hide matched (show 0), show only carry (if present fallback to computed)
+        // - Else show actual matched & pending
+        if ($qual) {
+            $placementMatchedDisplay = 0;
+            // prefer repurchase_carry table if present, otherwise show computed carry
+            $placementPendingDisplay = abs(($carryFromTable['left'] + $placementCombined['left']) - ($carryFromTable['right'] + $placementCombined['right']));
+            // For clarity show carry separately (carryFromTable if present else computed)
+            $carryToShow = $carryFromTable['left'] || $carryFromTable['right'] ? $carryFromTable : $carryForwardComputed;
+        } else {
+            $placementMatchedDisplay = $matchedActual;
+            $placementPendingDisplay = $pendingActual;
+            $carryToShow = $carryFromTable['left'] || $carryFromTable['right'] ? $carryFromTable : $carryForwardComputed;
+        }
+
+        // find highest slab achieved by displayed matched (so if qualified already, rank won't be re-shown incorrectly)
         $achievedRank = null;
         foreach ($slabs as $s) {
-            if ($placementMatched >= (float)$s['volume']) {
+            if ($placementMatchedDisplay >= (float)$s['volume']) {
                 $achievedRank = $s['rank'];
             }
         }
@@ -174,9 +204,10 @@ GROUP BY UPPER(COALESCE(t.root_leg,'NA'))
             'placement_sells' => $placementSells,
             'placement_repurchases' => $placementRepurchases,
             'placement_combined' => $placementCombined,
-            'placement_matched' => $placementMatched,
-            'placement_pending' => $placementPending,
-            'carry_forward' => $carryForward,
+            // displayed values (respect qualification/carry)
+            'placement_matched' => $placementMatchedDisplay,
+            'placement_pending' => $placementPendingDisplay,
+            'carry_forward' => $carryToShow,
             'achieved_rank' => $achievedRank,
             'paid_this_month' => $paidThisMonth,
         ]);
