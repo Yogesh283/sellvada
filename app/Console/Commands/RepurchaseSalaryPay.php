@@ -9,30 +9,37 @@ use Illuminate\Support\Carbon;
 class RepurchaseSalaryPay extends Command
 {
     protected $signature = 'repurchase:pay
-        {--period=monthly : period to pay (monthly|weekly)}
+        {--period=monthly : monthly or weekly}
         {--month= : target month YYYY-MM (for monthly)}
-        {--date= : target date YYYY-MM-DD (for weekly payments; typically Monday)}
-        {--dry : dry run (do not write)}';
+        {--date= : target date YYYY-MM-DD (for weekly payments; typically Monday)}';
 
-    protected $description = 'Pay due Repurchase Salary installments for the given period (monthly or weekly)';
+    protected $description = 'Pay due Repurchase Salary installments for given period (monthly or weekly)';
 
     public function handle(): int
     {
         $period = strtolower($this->option('period') ?? 'monthly');
         if (!in_array($period, ['monthly','weekly'])) $period = 'monthly';
-        $dry = (bool)$this->option('dry');
 
         if ($period === 'monthly') {
-            $monthStr = $this->option('month');
-            $month = $monthStr ? Carbon::parse($monthStr.'-01') : now()->startOfMonth();
-            $mStart = $month->copy()->startOfMonth();
-            $dueMarker = $mStart->toDateString(); // YYYY-MM-01
-            $this->line("Processing monthly payouts for: ".$mStart->format('Y-m'));
+            $monthStr = $this->option('month') ?: now()->format('Y-m');
+            try {
+                $month = Carbon::parse($monthStr.'-01');
+            } catch (\Throwable $e) {
+                $this->error('Invalid month. Use YYYY-MM');
+                return self::FAILURE;
+            }
+            $dueMarker = $month->copy()->startOfMonth()->toDateString(); // YYYY-MM-01
+            $this->line("Processing monthly payouts for: ".$month->format('Y-m'));
             $payoutType = 'repurchase_salary';
         } else {
-            $dateStr = $this->option('date');
-            $payDate = $dateStr ? Carbon::parse($dateStr)->startOfDay() : now()->startOfDay();
-            $dueMarker = $payDate->toDateString(); // Monday date like YYYY-MM-DD
+            $dateStr = $this->option('date') ?: now()->toDateString();
+            try {
+                $payDate = Carbon::parse($dateStr)->startOfDay();
+            } catch (\Throwable $e) {
+                $this->error('Invalid date. Use YYYY-MM-DD');
+                return self::FAILURE;
+            }
+            $dueMarker = $payDate->toDateString(); // Monday like YYYY-MM-DD
             $this->line("Processing weekly payouts due on: {$dueMarker}");
             $payoutType = 'repurchase_salary_weekly';
         }
@@ -53,7 +60,7 @@ class RepurchaseSalaryPay extends Command
         foreach ($dues as $row) {
             DB::beginTransaction();
             try {
-                // Idempotency: skip if identical payout exists same day & type & amount
+                // idempotency: check existing payout created same day for same amount
                 $exists = DB::table('_payout')
                     ->where('to_user_id', $row->sponsor_id)
                     ->where('type', $payoutType)
@@ -62,6 +69,7 @@ class RepurchaseSalaryPay extends Command
                     ->exists();
 
                 if ($exists) {
+                    // ensure installment marked paid and qualification incremented
                     DB::table('repurchase_salary_installments')->where('id', $row->id)->update(['paid_at' => now(), 'updated_at' => now()]);
                     DB::table('repurchase_salary_qualifications')->where('id', $row->qid)->increment('months_paid');
                     DB::commit();
@@ -70,17 +78,12 @@ class RepurchaseSalaryPay extends Command
                 }
 
                 $gross = (float)$row->amount;
-                $net = round($gross * 0.80, 2); // 20% deduction
+                $net = round($gross * 0.80, 2); // example: 20% tax/charges
+
                 $grossStr = number_format($gross, 2, '.', '');
                 $netStr = number_format($net, 2, '.', '');
 
-                if ($dry) {
-                    $this->info("DRY PAY → sponsor={$row->sponsor_id} due={$dueMarker} GROSS={$grossStr} NET={$netStr}");
-                    DB::rollBack();
-                    continue;
-                }
-
-                // ledger
+                // insert payout ledger
                 DB::table('_payout')->insert([
                     'user_id' => $row->sponsor_id,
                     'to_user_id' => $row->sponsor_id,
@@ -93,7 +96,7 @@ class RepurchaseSalaryPay extends Command
                     'updated_at' => now(),
                 ]);
 
-                // wallet credit
+                // credit wallet (net)
                 $affected = DB::update("UPDATE wallet SET amount = amount + ? WHERE user_id = ?", [$netStr, $row->sponsor_id]);
                 if ($affected === 0) {
                     DB::table('wallet')->insert([
@@ -104,11 +107,11 @@ class RepurchaseSalaryPay extends Command
                     ]);
                 }
 
-                // mark paid & bump months_paid
                 DB::table('repurchase_salary_installments')->where('id', $row->id)->update(['paid_at' => now(), 'updated_at' => now()]);
                 DB::table('repurchase_salary_qualifications')->where('id', $row->qid)->increment('months_paid');
 
-                $after = DB::table('repurchase_salary_qualifications')->find($row->qid);
+                // mark qualification completed if all months_paid reached
+                $after = DB::table('repurchase_salary_qualifications')->where('id', $row->qid)->first();
                 if ($after && (int)$after->months_paid >= (int)$after->months_total) {
                     DB::table('repurchase_salary_qualifications')->where('id', $row->qid)->update(['status' => 'completed', 'updated_at' => now()]);
                 }
