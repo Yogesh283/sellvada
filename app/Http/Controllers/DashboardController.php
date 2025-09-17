@@ -85,7 +85,7 @@ WITH RECURSIVE team AS (
         $teamRep = ['left'=>0.0,'right'=>0.0,'cnt_left'=>0,'cnt_right'=>0,'rows'=>[]];
 
         if ($hasReferral) {
-            // team sell totals (no date filter — lifetime). You can add date filters if you want monthly view.
+            // team sell totals (lifetime)
             $tsSql = $teamCte . "
 SELECT UPPER(COALESCE(u.position,'NA')) AS leg, COALESCE(SUM(s.amount),0) AS amt, COUNT(s.id) AS cnt
 FROM team u
@@ -115,11 +115,11 @@ GROUP BY UPPER(COALESCE(u.position,'NA'))
             }
             $teamRep['rows'] = $trRows;
         } else {
-            // fallback to sponsor-based sums if no referral root
+            // fallback (best-effort)
             $teamSell['left'] = (float) DB::table('sell')->where('sponsor_id',$userId)->where('status','paid')->where('leg','L')->sum('amount');
             $teamSell['right'] = (float) DB::table('sell')->where('sponsor_id',$userId)->where('status','paid')->where('leg','R')->sum('amount');
 
-            $teamRep['left'] = (float) DB::table('repurchase')->where('refer_by',$user->referral_id ?? '')->where('status','paid')->sum('amount'); // best-effort fallback (may require schema adjust)
+            $teamRep['left'] = (float) DB::table('repurchase')->where('refer_by',$user->referral_id ?? '')->where('status','paid')->sum('amount');
             $teamRep['right'] = 0.0;
         }
 
@@ -220,10 +220,10 @@ GROUP BY ttype
             }
         }
 
-        // businessSummary: pass combined team totals (sell+repurchase) — used by RewardPlan progress
+        // businessSummary: pass combined team totals (sell+repurchase)
         $businessSummary = ['left' => $teamCombined['left'], 'right' => $teamCombined['right']];
 
-        // prepare props (ensure names match Dashboard.jsx)
+        // prepare props
         $props = [
             'user' => Arr::except($raw, ['password','remember_token','Password_plain']),
             'user_all' => [

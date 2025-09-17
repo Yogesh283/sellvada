@@ -1,1 +1,0 @@
-import{j as s}from"./app-CzvGmPUr.js";function r({children:a}){return s.jsxs("div",{className:"min-h-screen bg-gray-50",children:[s.jsx("header",{className:"mx-auto max-w-6xl px-4 py-4"}),s.jsx("main",{children:a})]})}export{r as G};

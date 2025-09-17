@@ -9,13 +9,13 @@ const formatINR = (n) =>
     Number(n || 0)
   );
 
-const formatINRCompact = (n) => {
-  const num = Number(n || 0);
-  if (num >= 1_00_00_000) return `${(num / 1_00_00_000).toFixed(2)} Cr`;
-  if (num >= 1_00_000) return `${(num / 1_00_000).toFixed(2)} Lac`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(2)} K`;
-  return `${num}`;
-};
+// const formatINRCompact = (n) => {
+//   const num = Number(n || 0);
+//   if (num >= 1_00_00_000) return `${(num / 1_00_00_000).toFixed(2)} Cr`;
+//   if (num >= 1_00_000) return `${(num / 1_00_000).toFixed(2)} Lac`;
+//   if (num >= 1_000) return `${(num / 1_000).toFixed(2)} K`;
+//   return `${num}`;
+// };
 
 export default function VipRepurchaseSalary() {
   const page = usePage();
@@ -60,8 +60,8 @@ export default function VipRepurchaseSalary() {
       header={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900">🎖️ VIP Repurchase Salary</h1>
-            <p className="text-xs text-gray-500">Your monthly matching decides your VIP rank & 3-month salary.</p>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900">🎖️ VIP Weekly Salary</h1>
+            <p className="text-xs text-gray-500">Your Weekly matching decides your VIP rank & 3-month salary.</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -131,7 +131,7 @@ export default function VipRepurchaseSalary() {
         {/* Slab table */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow">
           <div className="bg-gradient-to-r from-indigo-600 to-violet-600 h-12 flex items-center px-4">
-            <h3 className="text-sm font-semibold text-white">Salary Slabs (3 Months)</h3>
+            <h3 className="text-sm font-semibold text-white">Salary Slabs (3 Week)</h3>
           </div>
 
           <div className="overflow-x-auto">
@@ -160,7 +160,6 @@ export default function VipRepurchaseSalary() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-mono">{formatINR(vol)}</span>
-                          <span className="text-gray-400 text-xs">({formatINRCompact(vol)})</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 font-semibold">{formatINR(s.salary)}</td>

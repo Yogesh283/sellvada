@@ -107,10 +107,11 @@ function CopyField({ label = null, value = "" }) {
       <button
         onClick={copy}
         type="button"
-        className={`rounded px-2 sm:px-3 py-1.5 text-sm font-semibold transition ${copied
-          ? "bg-green-600 text-white hover:bg-green-700"
-          : "bg-emerald-600 text-white hover:bg-emerald-700"
-          }`}
+        className={`rounded px-2 sm:px-3 py-1.5 text-sm font-semibold transition ${
+          copied
+            ? "bg-green-600 text-white hover:bg-green-700"
+            : "bg-emerald-600 text-white hover:bg-emerald-700"
+        }`}
       >
         {copied ? "Copied!" : "Copy"}
       </button>
@@ -119,7 +120,6 @@ function CopyField({ label = null, value = "" }) {
 }
 
 /* -------------------- Reward Plan component -------------------- */
-
 function secondsBetween(a, b) {
   return Math.max(0, Math.floor((new Date(b).getTime() - new Date(a).getTime()) / 1000));
 }
@@ -133,19 +133,8 @@ function humanCountdown(seconds) {
   return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
 }
 
-/**
- * RewardPlan
- * - plans: array of plan objects
- * - businessSummary: { left, right, matched? }
- * - fristsell: optional object { created_at: string } provided by controller props
- *
- * Timer behaviour:
- * - Timer ONLY starts from fristsell.created_at when fristsell exists.
- * - If no fristsell, timer shows 00:00:00 and explanatory message.
- */
 function RewardPlan({ plans = [], businessSummary = {}, fristsell = null }) {
-  // matched is read from global props (keeps previous behavior)
-  const { matched } = usePage().props;
+  const { matched, placement_combined } = usePage().props;
 
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -153,97 +142,67 @@ function RewardPlan({ plans = [], businessSummary = {}, fristsell = null }) {
     return () => clearInterval(id);
   }, []);
 
-  // Use first-sell created_at only (from server-provided fristsell). If null => no timer.
   const startRaw = fristsell?.created_at ?? null;
   const startDate = startRaw ? new Date(startRaw) : null;
 
-  const totalBusiness = Number(businessSummary.left || 0) + Number(businessSummary.right || 0);
-  const maxThreshold = plans.reduce((mx, p) => Math.max(mx, p.volumeNumber ?? 0), 0);
+  const totalBusiness =
+    Number(businessSummary.left || 0) + Number(businessSummary.right || 0);
+  const maxThreshold = plans.reduce(
+    (mx, p) => Math.max(mx, p.volumeNumber ?? 0),
+    0
+  );
 
+  /* ---------------- Progress calculation ---------------- */
+  const progressPercent =
+    maxThreshold > 0 ? Math.min(100, Math.round((matched / maxThreshold) * 100)) : 0;
+
+  /* ---------------- Plan Status ---------------- */
   const planStatuses = plans.map((p) => {
     if (!startDate) {
-      // no first sell yet — show no_sell status and remainingSecs = 0
       return { ...p, status: "no_sell", remainingSecs: 0, endDate: null };
     }
-    const endDate = new Date(startDate.getTime() + (p.daysNumber || 0) * 24 * 3600 * 1000);
+    const endDate = new Date(
+      startDate.getTime() + (p.daysNumber || 0) * 24 * 3600 * 1000
+    );
     const secs = secondsBetween(new Date().toISOString(), endDate);
     if (secs > 0) return { ...p, status: "active", remainingSecs: secs, endDate };
     return { ...p, status: "expired", remainingSecs: 0, endDate };
   });
 
-  const activePlans = planStatuses.filter((ps) => ps.status === "active");
-  const earliestActive = activePlans.length
-    ? activePlans.reduce((a, b) => (a.remainingSecs < b.remainingSecs ? a : b))
-    : null;
-  const bigCountdownSecs = earliestActive ? earliestActive.remainingSecs : 0;
-
   return (
     <div className="rounded-lg bg-white shadow-sm overflow-hidden border border-slate-200">
-      <div className={`${G.barEmerald} px-4 py-3 text-white font-semibold text-center`}>
-        Cell Veda — Business Growth Rewards
+      <div
+        className={`${G.barEmerald} px-4 py-3 text-white font-semibold text-center`}
+      >
+        Cell Veda — Business Growth Reward
       </div>
       <div className="p-4">
-        {startDate ? (
-          // first sell exists: show countdown or expired message
-          earliestActive ? (
-            <div className="mb-6 flex flex-col items-center justify-center gap-2 text-center">
-              <div className="text-slate-600 text-xs sm:text-sm">This countdown is running from the date of your first purchase (First Sell)</div>
-              <div className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tabular-nums text-green-600 break-words">
-                {humanCountdown(bigCountdownSecs)}
-              </div>
-              <div className="text-xs sm:text-sm text-slate-500">
-                Expires: {formatDT(earliestActive.endDate)}
-              </div>
-            </div>
-          ) : (
-            <div className="mb-6 flex flex-col items-center justify-center gap-2 text-center">
-              <div className="text-slate-600 text-xs sm:text-sm">This countdown is running from the date of your first purchase (First Sell)</div>
-              <div className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tabular-nums text-gray-600 break-words">
-                {humanCountdown(0)}
-              </div>
-              <div className="text-xs sm:text-sm text-slate-500">
-                No active reward window
-              </div>
-            </div>
-          )
-        ) : (
-          // no first sell yet -> show 00:00:00 and info
-          <div className="mb-6 flex flex-col items-center justify-center gap-2 text-center">
-            <div className="text-slate-600 text-xs sm:text-sm">
-              This timer will start when you make your first purchase — no first purchase found yet.            </div>
-            <div className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tabular-nums text-gray-500 break-words">
-              {humanCountdown(0)}
-            </div>
-            <div className="text-xs sm:text-sm text-slate-500">No First Sell found — Timer 00:00:00</div>
-          </div>
-        )}
 
-        {/* Team business green progress line */}
+        {/* ✅ Progress bar section */}
         <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
-            <div className="text-sm font-medium text-slate-700">Team Business</div>
-            <div className="text-sm font-medium text-slate-600">{formatINR(matched)}</div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-slate-700">
+              Progress ({placement_combined?.matched ?? 0} / {formatINR(maxThreshold)})
+            </span>
+            <span className="text-sm font-medium text-slate-600">
+              {progressPercent}%
+            </span>
           </div>
-
-          <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+          <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden">
             <div
-              className="h-3 rounded-full transition-all duration-500"
+              className="h-4 rounded-full transition-all duration-700 ease-in-out"
               style={{
-                width: `${maxThreshold > 0 ? Math.min(100, Math.round((totalBusiness / maxThreshold) * 100)) : 0}%`,
+                width: `${progressPercent}%`,
                 background:
-                  totalBusiness === matched
-                    ? "linear-gradient(90deg,#2563eb,#3b82f6)" // blue if equal
-                    : "linear-gradient(90deg,#059669,#10b981)", // green otherwise
+                  progressPercent === 100
+                    ? "linear-gradient(90deg,#2563eb,#3b82f6)" // blue full
+                    : "linear-gradient(90deg,#059669,#10b981)", // green filling
               }}
             />
           </div>
-
-          <div className="text-xs text-slate-400 mt-1">
-            Progress towards highest plan ({maxThreshold ? formatINR(maxThreshold) : "-"})
-          </div>
         </div>
 
-        {/* Responsive table */}
+        {/* बाकी table same रहेगा */}
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm text-center border border-slate-200">
             <thead className="bg-slate-50">
@@ -255,29 +214,22 @@ function RewardPlan({ plans = [], businessSummary = {}, fristsell = null }) {
               </tr>
             </thead>
             <tbody>
-              {planStatuses.map((ps, idx) => {
-                let remainDisplay = "-";
-                let remainClass = "text-slate-600";
-                if (ps.status === "active") {
-                  remainDisplay = humanCountdown(ps.remainingSecs);
-                  remainClass = "text-green-600 font-semibold";
-                } else if (ps.status === "expired") {
-                  remainDisplay = "Expired";
-                  remainClass = "text-red-600 font-semibold";
-                } else if (ps.status === "no_sell") {
-                  remainDisplay = humanCountdown(0); // show 00:00:00 in table
-                  remainClass = "text-gray-500";
-                }
-
-                return (
-                  <tr key={idx} className="border-b last:border-0">
-                    <td className="py-2 px-2 font-medium">{ps.days} Days</td>
-                    <td className="py-2 px-2">{ps.volume}</td>
-                    <td className="py-2 px-2 font-bold text-emerald-600">{formatINR(ps.reward)}</td>
-                    <td className={`py-2 px-2 ${remainClass}`}>{remainDisplay}</td>
-                  </tr>
-                );
-              })}
+              {planStatuses.map((ps, idx) => (
+                <tr key={idx} className="border-b last:border-0">
+                  <td className="py-2 px-2 font-medium">{ps.days} Days</td>
+                  <td className="py-2 px-2">{ps.volume}</td>
+                  <td className="py-2 px-2 font-bold text-emerald-600">
+                    {formatINR(ps.reward)}
+                  </td>
+                  <td className="py-2 px-2">
+                    {ps.status === "active"
+                      ? humanCountdown(ps.remainingSecs)
+                      : ps.status === "expired"
+                      ? "Expired"
+                      : "00:00:00"}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -285,6 +237,7 @@ function RewardPlan({ plans = [], businessSummary = {}, fristsell = null }) {
     </div>
   );
 }
+
 
 /* -------------------- Page -------------------- */
 export default function Dashboard() {
@@ -294,11 +247,10 @@ export default function Dashboard() {
   const payoutBalance = formatINR(props?.payout_wallet ?? 0);
   const TotalTeam = props?.total_team ?? 0;
   const CurrentPlan = props?.current_plan ?? "-";
-  const { left, right } = usePage().props;
+  const { left, right, matched, placement_combined } = usePage().props;
 
   const {
     user = {},
-    stats = {},
     ref_link = "#",
     businessSummary = { left: 0, right: 0 },
   } = props;
@@ -306,9 +258,6 @@ export default function Dashboard() {
   const userName = user?.name ?? "-";
   const userId = user?.id ?? "-";
 
-  // prefer first sell created_at for "Joined" display if available, otherwise fallback to user.created_at
-  // backend (controller) should set 'fristsell' prop using:
-  // $firstsell = DB::table('sell')->where('buyer_id', $user->id)->where('status','paid')->orderBy('created_at','asc')->first();
   const fristsellObj = props?.fristsell ?? null;
   const createdAtRaw = fristsellObj?.created_at ?? user?.created_at;
   const createdAt = formatDT(createdAtRaw);
@@ -332,7 +281,9 @@ export default function Dashboard() {
         {/* Welcome */}
         <div className="rounded-md bg-white shadow-sm ring-1 ring-slate-100">
           <div className="p-3 sm:p-4">
-            <div className="text-slate-900 font-semibold mb-3 text-base sm:text-lg">Welcome {userName}</div>
+            <div className="text-slate-900 font-semibold mb-3 text-base sm:text-lg">
+              Welcome {userName}
+            </div>
 
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs sm:text-sm text-center border border-slate-200">
@@ -360,15 +311,9 @@ export default function Dashboard() {
             </div>
 
             <div className="mt-4 flex flex-col sm:flex-row sm:justify-end gap-2">
-              <a href="/profile" className="rounded bg-sky-600 px-3 py-2 text-white text-sm font-semibold hover:bg-sky-700 text-center">
-                View Profile
-              </a>
-              <a href="/team" className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700 text-center">
-                My Team
-              </a>
-              <a href="/team/tree" className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700 text-center">
-                Tree
-              </a>
+              <a href="/profile" className="rounded bg-sky-600 px-3 py-2 text-white text-sm font-semibold hover:bg-sky-700 text-center">View Profile</a>
+              <a href="/team" className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700 text-center">My Team</a>
+              <a href="/team/tree" className="rounded bg-emerald-600 px-3 py-2 text-white text-sm font-semibold hover:bg-emerald-700 text-center">Tree</a>
             </div>
           </div>
         </div>
@@ -380,7 +325,7 @@ export default function Dashboard() {
             <a href="/income/star" className="font-bold">View</a>
           </button>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 sm:mt-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6 sm:mt-8">
             <div className="bg-white shadow rounded-xl p-4 sm:p-6 w-full">
               <div className="text-xs text-gray-500">Left Volume</div>
               <div className="text-xl sm:text-2xl font-bold">{Number(left)}</div>
@@ -389,12 +334,18 @@ export default function Dashboard() {
               <div className="text-xs text-gray-500">Right Volume</div>
               <div className="text-xl sm:text-2xl font-bold">{Number(right)}</div>
             </div>
+            <div className="bg-white shadow rounded-xl p-4 sm:p-6 w-full">
+              <div className="text-xs text-gray-500">Placement Matching</div>
+              <div className="text-xl sm:text-2xl font-bold text-purple-600">
+                {placement_combined?.matched ?? 0}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Stat cards */}
         <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="Fresh Matching" value="" icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
+          <StatCard title="Fresh Matching" value={formatINR(matched)} icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
           <StatCard title="VIP Weekly Salary" value="" icon="📍" actionHref="/income/vip-repurchase-salary" gradient={G.amber} />
           <StatCard title="Wallet Balance" value={availableBalance} icon="👛" gradient={G.tealBlue} />
           <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" gradient={G.emerald} />
