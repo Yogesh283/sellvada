@@ -15,7 +15,10 @@ function Badge({ status }) {
 
 function formatINR(n) {
   const num = typeof n === "number" ? n : parseFloat(n ?? 0);
-  return num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return num.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function Payouts() {
@@ -33,27 +36,54 @@ export default function Payouts() {
       <div className="py-6">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card title="Total Paid" value={`₹ ${formatINR(stats.sumPaid)}`} />
             <Card title="Pending" value={`₹ ${formatINR(stats.sumPending)}`} />
             <Card title="Today Paid" value={`₹ ${formatINR(stats.todayPaid)}`} />
-            <Card title="This Month Paid" value={`₹ ${formatINR(stats.monthPaid)}`} />
+            <Card
+              title="This Month Paid"
+              value={`₹ ${formatINR(stats.monthPaid)}`}
+            />
           </div>
 
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <FilterLink label="All" qs={{}} active={!filters.status && !filters.method && !filters.type} />
-            <FilterLink label="Paid" qs={{ status: "paid" }} active={filters.status === "paid"} />
-            <FilterLink label="Pending" qs={{ status: "pending" }} active={filters.status === "pending"} />
-            <span className="mx-2 h-5 w-px bg-slate-200" />
-            <FilterLink label="Closing 1" qs={{ method: "closing_1" }} active={filters.method === "closing_1"} />
-            <FilterLink label="Closing 2" qs={{ method: "closing_2" }} active={filters.method === "closing_2"} />
-            <span className="mx-2 h-5 w-px bg-slate-200" />
-            <FilterLink label="Binary Matching" qs={{ type: "binary_matching" }} active={filters.type === "binary_matching"} />
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <FilterLink
+              label="All"
+              qs={{}}
+              active={!filters.status && !filters.method && !filters.type}
+            />
+            <FilterLink
+              label="Paid"
+              qs={{ status: "paid" }}
+              active={filters.status === "paid"}
+            />
+            <FilterLink
+              label="Pending"
+              qs={{ status: "pending" }}
+              active={filters.status === "pending"}
+            />
+            <span className="mx-2 h-5 w-px bg-slate-200 hidden sm:block" />
+            <FilterLink
+              label="Closing 1"
+              qs={{ method: "closing_1" }}
+              active={filters.method === "closing_1"}
+            />
+            <FilterLink
+              label="Closing 2"
+              qs={{ method: "closing_2" }}
+              active={filters.method === "closing_2"}
+            />
+            <span className="mx-2 h-5 w-px bg-slate-200 hidden sm:block" />
+            <FilterLink
+              label="Binary Matching"
+              qs={{ type: "binary_matching" }}
+              active={filters.type === "binary_matching"}
+            />
           </div>
 
-          {/* Table */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          {/* Table (Desktop) */}
+          <div className="hidden sm:block overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
@@ -67,7 +97,10 @@ export default function Payouts() {
               <tbody className="divide-y divide-slate-100">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-10 text-center text-slate-500">
+                    <td
+                      colSpan={5}
+                      className="py-10 text-center text-slate-500"
+                    >
                       No payouts found.
                     </td>
                   </tr>
@@ -75,10 +108,18 @@ export default function Payouts() {
                   rows.map((r) => (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <Td>{new Date(r.created_at).toLocaleString()}</Td>
-                      <Td className="capitalize">{r.type?.replaceAll("_"," ") || "-"}</Td>
-                      <Td className="capitalize">{r.method?.replaceAll("_"," ") || "-"}</Td>
-                      <Td><Badge status={r.status} /></Td>
-                      <Td className="text-right font-medium">₹ {formatINR(r.amount)}</Td>
+                      <Td className="capitalize">
+                        {r.type?.replaceAll("_", " ") || "-"}
+                      </Td>
+                      <Td className="capitalize">
+                        {r.method?.replaceAll("_", " ") || "-"}
+                      </Td>
+                      <Td>
+                        <Badge status={r.status} />
+                      </Td>
+                      <Td className="text-right font-medium">
+                        ₹ {formatINR(r.amount)}
+                      </Td>
                     </tr>
                   ))
                 )}
@@ -86,8 +127,38 @@ export default function Payouts() {
             </table>
           </div>
 
+          {/* Card List (Mobile) */}
+          <div className="grid sm:hidden gap-3">
+            {rows.length === 0 ? (
+              <div className="text-center text-slate-500 py-6 bg-white rounded-lg border">
+                No payouts found.
+              </div>
+            ) : (
+              rows.map((r) => (
+                <div
+                  key={r.id}
+                  className="bg-white rounded-xl border p-4 shadow-sm space-y-2"
+                >
+                  <div className="flex justify-between text-sm text-slate-500">
+                    <span>{new Date(r.created_at).toLocaleDateString()}</span>
+                    <Badge status={r.status} />
+                  </div>
+                  <div className="text-slate-800 font-medium capitalize">
+                    {r.type?.replaceAll("_", " ") || "-"}
+                  </div>
+                  <div className="text-xs text-slate-500 capitalize">
+                    Method: {r.method?.replaceAll("_", " ") || "-"}
+                  </div>
+                  <div className="text-lg font-bold text-right text-emerald-700">
+                    ₹ {formatINR(r.amount)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
           {/* Pagination */}
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 flex-wrap">
             {links.map((l, i) => (
               <Link
                 key={i}
@@ -111,9 +182,11 @@ export default function Payouts() {
 
 function Card({ title, value }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center sm:text-left">
       <div className="text-slate-500 text-sm">{title}</div>
-      <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
+      <div className="mt-1 text-lg sm:text-2xl font-semibold text-slate-900">
+        {value}
+      </div>
     </div>
   );
 }
@@ -127,7 +200,11 @@ function Th({ children, className = "" }) {
   );
 }
 function Td({ children, className = "" }) {
-  return <td className={`px-4 py-3 text-sm text-slate-800 ${className}`}>{children}</td>;
+  return (
+    <td className={`px-4 py-3 text-sm text-slate-800 ${className}`}>
+      {children}
+    </td>
+  );
 }
 function FilterLink({ label, qs, active }) {
   const href = useMemo(() => {
