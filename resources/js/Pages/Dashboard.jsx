@@ -334,19 +334,19 @@ export default function Dashboard() {
               <div className="text-xs text-gray-500">Right Volume</div>
               <div className="text-xl sm:text-2xl font-bold">{Number(right)}</div>
             </div>
-            <div className="bg-white shadow rounded-xl p-4 sm:p-6 w-full">
+            {/* <div className="bg-white shadow rounded-xl p-4 sm:p-6 w-full">
               <div className="text-xs text-gray-500">Placement Matching</div>
               <div className="text-xl sm:text-2xl font-bold text-purple-600">
                 {placement_combined?.matched ?? 0}
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
 
         {/* Stat cards */}
         <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="Fresh Matching" value={formatINR(matched)} icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
           <StatCard title="VIP Weekly Salary" value="" icon="📍" actionHref="/income/vip-repurchase-salary" gradient={G.amber} />
+          <StatCard title="Fresh Matching" value={formatINR(matched)} icon="🧮" actionHref="/income/binary" gradient={G.orangePink} />
           <StatCard title="Wallet Balance" value={availableBalance} icon="👛" gradient={G.tealBlue} />
           <StatCard title="Total Income" value={payoutBalance} icon="💼" actionHref="/payouts" gradient={G.emerald} />
           <StatCard title="MY PROFILE" value="" icon="👤" actionHref="/profile" gradient={G.sky} />

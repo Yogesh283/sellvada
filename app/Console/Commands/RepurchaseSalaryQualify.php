@@ -132,7 +132,7 @@ class RepurchaseSalaryQualify extends Command
             $this->summary['qualified_count']++;
 
             // qualification month
-            $firstPayMonth = Carbon::parse($mStart)->copy()->startOfMonth()->toDateString();
+            $firstPayWeek = Carbon::parse($mStart)->copy()->startOfWeek(Carbon::MONDAY)->toDateString();
             $periodMarker  = Carbon::parse($mStart)->toDateString();
 
             if ($dry) {
@@ -169,17 +169,19 @@ class RepurchaseSalaryQualify extends Command
                         'salary_amount'     => $qualified->salary_amount,
                         'months_total'      => 3,
                         'months_paid'       => 0,
-                        'first_payout_month'=> $firstPayMonth,
+                        'first_payout_month'=> $firstPayWeek,
                         'status'            => 'active',
                         'created_at'        => now(),
                         'updated_at'        => now(),
                     ]);
 
-                    // installments (this month + next 2)
+                    // installments (3 weekly installments in same month)
                     for ($i=0; $i<3; $i++) {
-                        $due = Carbon::parse($firstPayMonth)
-                            ->copy()->addMonthsNoOverflow($i)
-                            ->startOfMonth()->toDateString();
+                        $due = Carbon::parse($firstPayWeek)
+                            ->copy()
+                            ->addWeeks($i)
+                            ->startOfWeek(Carbon::MONDAY)
+                            ->toDateString();
 
                         DB::table('repurchase_salary_installments')->insert([
                             'qualification_id' => $qid,

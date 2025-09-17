@@ -32,28 +32,23 @@ class Kernel extends ConsoleKernel
         ->appendOutputTo(storage_path('logs/star_compute.log'));
 }
 
-protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule): void
+// app/Console/Kernel.php
+
+protected function schedule(Schedule $schedule)
 {
-    $tz = 'Asia/Kolkata';
+    // हर Monday सुबह 1:00 AM → qualification run
+    $schedule->command('repurchase:qualify --require-self=1')
+             ->mondays()
+             ->at('01:00')
+             ->withoutOverlapping();
 
-    // On the 1st of every month → qualify previous month
-    $schedule->command('repurchase:qualify')
-        ->timezone($tz)
-        ->monthlyOn(1, '00:10')
-        ->appendOutputTo(storage_path('logs/repurchase_qualify.log'));
-
-    // Pay current month installment (run daily; idempotent)
-    $schedule->command('repurchase:pay')
-        ->timezone($tz)
-        ->dailyAt('00:20')
-        ->appendOutputTo(storage_path('logs/repurchase_pay.log'));
-
-        protected $routeMiddleware = [
-    // ...
-    'admin' => \App\Http\Middleware\AdminOnly::class,
-];
-
+    // हर Monday सुबह 2:00 AM → payout run (closing पिछले Sunday तक)
+    $schedule->command('repurchase:pay --date=' . now()->format('Y-m-d'))
+             ->mondays()
+             ->at('02:00')
+             ->withoutOverlapping();
 }
+
 
 
 }

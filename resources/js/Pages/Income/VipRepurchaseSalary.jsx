@@ -5,17 +5,11 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 
 /* helpers */
 const formatINR = (n) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
-    Number(n || 0)
-  );
-
-// const formatINRCompact = (n) => {
-//   const num = Number(n || 0);
-//   if (num >= 1_00_00_000) return `${(num / 1_00_00_000).toFixed(2)} Cr`;
-//   if (num >= 1_00_000) return `${(num / 1_00_000).toFixed(2)} Lac`;
-//   if (num >= 1_000) return `${(num / 1_000).toFixed(2)} K`;
-//   return `${num}`;
-// };
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Number(n || 0));
 
 export default function VipRepurchaseSalary() {
   const page = usePage();
@@ -60,8 +54,12 @@ export default function VipRepurchaseSalary() {
       header={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900">🎖️ VIP Weekly Salary</h1>
-            <p className="text-xs text-gray-500">Your Weekly matching decides your VIP rank & 3-month salary.</p>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+              🎖️ VIP Weekly Salary
+            </h1>
+            <p className="text-xs text-gray-500">
+              Your Weekly matching decides your VIP rank & 3-weekly salary.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -82,23 +80,35 @@ export default function VipRepurchaseSalary() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <div className="rounded-xl border bg-white p-5 shadow-sm">
             <div className="text-xs text-gray-500">Placement Left</div>
-            <div className="mt-2 text-2xl font-bold text-indigo-700">{formatINR(placementCombined.left)}</div>
-            <div className="text-xs text-gray-500 mt-1">
-              Sell: {formatINR(placementSells.left)} • Repurchase: {formatINR(placementRepurchases.left)}
+            <div className="mt-2 text-2xl font-bold text-indigo-700">
+              {formatINR(placementCombined.left)}
             </div>
-            <div className="text-xs text-gray-400 mt-2">
-              Carry Forward: {formatINR(server?.carry_forward?.left ?? 0)}
+            <div className="text-xs text-gray-500 mt-1">
+              Sell: {formatINR(placementSells.left)} • Repurchase:{" "}
+              {formatINR(placementRepurchases.left)}
+            </div>
+            {/* 🔥 Highlight Carry Forward Left */}
+            <div className="mt-2">
+              <span className="inline-block rounded-md bg-green-400 px-2 py-1 text-xs font-semibold text-black-700">
+                Carry Forward: {formatINR(server?.carry_forward?.left ?? 0)}
+              </span>
             </div>
           </div>
 
           <div className="rounded-xl border bg-white p-5 shadow-sm">
             <div className="text-xs text-gray-500">Placement Right</div>
-            <div className="mt-2 text-2xl font-bold text-indigo-700">{formatINR(placementCombined.right)}</div>
-            <div className="text-xs text-gray-500 mt-1">
-              Sell: {formatINR(placementSells.right)} • Repurchase: {formatINR(placementRepurchases.right)}
+            <div className="mt-2 text-2xl font-bold text-indigo-700">
+              {formatINR(placementCombined.right)}
             </div>
-            <div className="text-xs text-gray-400 mt-2">
-              Carry Forward: {formatINR(server?.carry_forward?.right ?? 0)}
+            <div className="text-xs text-gray-500 mt-1">
+              Sell: {formatINR(placementSells.right)} • Repurchase:{" "}
+              {formatINR(placementRepurchases.right)}
+            </div>
+            {/* 🔥 Highlight Carry Forward Right */}
+            <div className="mt-2">
+              <span className="inline-block rounded-md bg-green-500 px-2 py-1 text-xs font-semibold text-black-700">
+                Carry Forward: {formatINR(server?.carry_forward?.right ?? 0)}
+              </span>
             </div>
           </div>
         </div>
@@ -111,7 +121,8 @@ export default function VipRepurchaseSalary() {
             </span>
             {next ? (
               <span className="text-amber-600">
-                Next slab ({next.rank}) needs {formatINR(Math.max(0, Number(next.volume) - matched))}
+                Next slab ({next.rank}) needs{" "}
+                {formatINR(Math.max(0, Number(next.volume) - matched))}
               </span>
             ) : (
               <span className="text-emerald-600">🎉 Max slab achieved</span>
@@ -122,7 +133,10 @@ export default function VipRepurchaseSalary() {
             <div
               className="h-3 bg-gradient-to-r from-emerald-400 to-emerald-600"
               style={{
-                width: `${Math.min(100, Math.round((matched / (next?.volume || matched)) * 100))}%`,
+                width: `${Math.min(
+                  100,
+                  Math.round((matched / (next?.volume || matched)) * 100)
+                )}%`,
               }}
             ></div>
           </div>
@@ -131,7 +145,9 @@ export default function VipRepurchaseSalary() {
         {/* Slab table */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow">
           <div className="bg-gradient-to-r from-indigo-600 to-violet-600 h-12 flex items-center px-4">
-            <h3 className="text-sm font-semibold text-white">Salary Slabs (3 Week)</h3>
+            <h3 className="text-sm font-semibold text-white">
+              Salary Slabs (3 Week)
+            </h3>
           </div>
 
           <div className="overflow-x-auto">
@@ -155,14 +171,25 @@ export default function VipRepurchaseSalary() {
                   else pct = Math.round(((matched - prev) / (vol - prev)) * 100);
 
                   return (
-                    <tr key={idx} className={pct === 100 ? "bg-emerald-50" : pct > 0 ? "bg-amber-50" : ""}>
+                    <tr
+                      key={idx}
+                      className={
+                        pct === 100
+                          ? "bg-emerald-50"
+                          : pct > 0
+                          ? "bg-amber-50"
+                          : ""
+                      }
+                    >
                       <td className="px-4 py-3 font-semibold">{s.rank}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-mono">{formatINR(vol)}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-semibold">{formatINR(s.salary)}</td>
+                      <td className="px-4 py-3 font-semibold">
+                        {formatINR(s.salary)}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         {pct === 100 ? (
                           <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700">
@@ -170,7 +197,10 @@ export default function VipRepurchaseSalary() {
                           </span>
                         ) : pct > 0 ? (
                           <div className="w-full bg-gray-200 h-2 rounded-full">
-                            <div className="h-2 bg-amber-500 rounded-full" style={{ width: `${pct}%` }}></div>
+                            <div
+                              className="h-2 bg-amber-500 rounded-full"
+                              style={{ width: `${pct}%` }}
+                            ></div>
                           </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600">
@@ -188,7 +218,10 @@ export default function VipRepurchaseSalary() {
 
         {/* Note box */}
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <b>Note:</b> Matching = <i>min(Left, Right)</i>. Carry Forward = Unmatched volume forwarded automatically.
+          <b>
+            VIP Weekly Salary Plan ✔ Salary Cycle: Every Monday to Sunday ✔
+            Salary Credited: After Weekly Closing
+          </b>
         </div>
       </div>
     </AuthenticatedLayout>
