@@ -35,12 +35,15 @@ class RegisteredUserController extends Controller
         $data = $request->validate([
             'name'      => 'required|string|max:255',
             'email'     => 'required|string|lowercase|email|max:255|unique:users,email',
+            'phone'     => 'required|string|max:20|unique:users,phone',
             'password'  => ['required', 'confirmed', Rules\Password::defaults()],
             'refer_by'  => 'required|string',
             'side'      => 'required|in:L,R',
             'spillover' => 'sometimes|boolean',
         ], [
             'refer_by.required' => 'Referral ID (Sponsor code) is required.',
+            'phone.required'    => 'Phone number is required.',
+            'phone.unique'      => 'This phone number is already registered.',
         ]);
 
         // robust sponsor lookup (referral_id / referral_code / email / id)
@@ -89,6 +92,7 @@ class RegisteredUserController extends Controller
             $user = User::create([
                 'name'           => $data['name'],
                 'email'          => $data['email'],
+                'phone'          => $data['phone'],   // <-- saved here
                 'password'       => Hash::make($data['password']),
                 'referral_id'    => $newReferralId,
                 'refer_by'       => $ref,              // sponsor’s referral code (string)

@@ -3,12 +3,13 @@ import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function Register() {
   const { data, setData, post, processing, errors, reset } = useForm({
     name: '',
     email: '',
+    phone: '', // NEW
     password: '',
     password_confirmation: '',
     refer_by: '',
@@ -16,12 +17,16 @@ export default function Register() {
     spillover: true,
   });
 
+  // show/hide toggles for password fields
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const ref = params.get('refer_by');
       if (ref && !data.refer_by) setData('refer_by', ref);
-    } catch (_) {}
+    } catch (_) { }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -39,7 +44,7 @@ export default function Register() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-emerald-50 px-4">
         {/* Card */}
         <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
-          
+
           {/* Logo */}
           <div className="mb-6 text-center">
             <img src="/image/11111.png" alt="Brand Logo" className="mx-auto h-14 w-auto" />
@@ -51,7 +56,7 @@ export default function Register() {
             <p className="text-sm text-slate-500">It only takes a minute.</p>
           </div>
 
-          <form onSubmit={submit} className="space-y-5">
+          <form onSubmit={submit} className="space-y-5" noValidate>
             {/* Name */}
             <div>
               <InputLabel htmlFor="name" value="Full name" />
@@ -84,34 +89,79 @@ export default function Register() {
               <InputError message={errors.email} className="mt-2" />
             </div>
 
-            {/* Passwords */}
+            {/* Phone number */}
+            {/* Phone number */}
+            <div>
+              <InputLabel htmlFor="phone" value="Phone number" />
+              <TextInput
+                id="phone"
+                name="phone"
+                type="tel"
+                inputMode="tel"
+                value={data.phone}
+                className="mt-1 block w-full"
+                placeholder="e.g., +919876543210"
+                maxLength={20}
+                required   // 👈 Phone field ab required
+                onChange={(e) => {
+                  // gentle cleaning: preserve plus, digits and spaces
+                  const val = e.target.value;
+                  const cleaned = val.replace(/[^\d+\s-()]/g, '');
+                  setData('phone', cleaned);
+                }}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Add country code if needed (e.g., +91xxxxxxxxxx). Backend unchanged.
+              </p>
+              <InputError message={errors.phone} className="mt-2" />
+            </div>
+
+
+            {/* Passwords with show/hide */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
+              <div className="relative">
                 <InputLabel htmlFor="password" value="Password" />
                 <TextInput
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   name="password"
                   value={data.password}
-                  className="mt-1 block w-full"
+                  className="mt-1 block w-full pr-10"
                   autoComplete="new-password"
                   onChange={(e) => setData('password', e.target.value)}
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  className="absolute right-3 top-9 rounded px-1 py-0.5 text-sm text-gray-500 hover:text-gray-700 focus:outline-none"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
                 <InputError message={errors.password} className="mt-2" />
               </div>
-              <div>
+
+              <div className="relative">
                 <InputLabel htmlFor="password_confirmation" value="Confirm password" />
                 <TextInput
                   id="password_confirmation"
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   name="password_confirmation"
                   value={data.password_confirmation}
-                  className="mt-1 block w-full"
+                  className="mt-1 block w-full pr-10"
                   autoComplete="new-password"
                   onChange={(e) => setData('password_confirmation', e.target.value)}
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((p) => !p)}
+                  className="absolute right-3 top-9 rounded px-1 py-0.5 text-sm text-gray-500 hover:text-gray-700 focus:outline-none"
+                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                >
+                  {showConfirmPassword ? '🙈' : '👁️'}
+                </button>
                 <InputError message={errors.password_confirmation} className="mt-2" />
               </div>
             </div>
@@ -144,22 +194,20 @@ export default function Register() {
                     <button
                       type="button"
                       onClick={() => setData('side', 'L')}
-                      className={`py-2 text-sm font-medium ${
-                        data.side === 'L'
+                      className={`py-2 text-sm font-medium ${data.side === 'L'
                           ? 'bg-emerald-600 text-white'
                           : 'bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       Left
                     </button>
                     <button
                       type="button"
                       onClick={() => setData('side', 'R')}
-                      className={`py-2 text-sm font-medium ${
-                        data.side === 'R'
+                      className={`py-2 text-sm font-medium ${data.side === 'R'
                           ? 'bg-emerald-600 text-white'
                           : 'bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       Right
                     </button>
